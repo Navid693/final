@@ -1,0 +1,7 @@
+PyQt5
+mss
+Pillow
+pyautogui
+numpy
+httpx
+websocket-client 
