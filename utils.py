@@ -89,23 +89,33 @@ def capture_screenshot(monitor_number=1, quality=75):
 
 # --- Input Simulation ---
 
-def simulate_mouse_event(event_data, screen_width, screen_height):
-    """Simulates mouse events based on received data."""
+def simulate_mouse_event(event_data):
+    """Simulates mouse events based on received data using local screen size."""
     event_type = event_data['type']
-    x = event_data['x']
-    y = event_data['y']
-    button = event_data.get('button') # Use get for optional button
+    # Get coordinates relative to the *remote* screen size sent by the controller
+    x = event_data['x'] 
+    y = event_data['y'] 
+    # We also need the dimensions of the screen *where the event occurred* (controller's view)
+    # This information is implicitly handled by get_scaled_coords in ui.py, which sends
+    # coordinates already scaled relative to the remote screen size.
 
-    # Scale coordinates if necessary (assuming client sends relative coords)
-    # This might need adjustment depending on how coords are sent/interpreted
-    actual_x = int(x * pyautogui.size().width / screen_width)
-    actual_y = int(y * pyautogui.size().height / screen_height)
+    button = event_data.get('button')
+
+    # Get the actual screen size of the machine *running this code* (the host)
+    host_width, host_height = pyautogui.size()
+
+    # Since controller sends coords relative to remote screen, no further scaling needed here.
+    # We directly use x and y, but clamp them to the host screen bounds.
+    actual_x = max(0, min(x, host_width))
+    actual_y = max(0, min(y, host_height))
 
     try:
         if event_type == 'move':
             pyautogui.moveTo(actual_x, actual_y)
-        elif event_type == 'click':
-            pyautogui.click(x=actual_x, y=actual_y, button=button)
+        elif event_type == 'click': # Note: PyAutoGUI click needs press/release separated usually
+             # Sending press/release is more reliable
+             pyautogui.mouseDown(x=actual_x, y=actual_y, button=button)
+             pyautogui.mouseUp(x=actual_x, y=actual_y, button=button)
         elif event_type == 'press':
              pyautogui.mouseDown(x=actual_x, y=actual_y, button=button)
         elif event_type == 'release':
@@ -113,11 +123,10 @@ def simulate_mouse_event(event_data, screen_width, screen_height):
         elif event_type == 'scroll':
             delta_x = event_data.get('delta_x', 0)
             delta_y = event_data.get('delta_y', 0)
-            # PyAutoGUI scroll takes 'clicks' - adjust multiplier as needed
             if delta_y != 0:
-                pyautogui.scroll(delta_y // abs(delta_y) * 5 if delta_y else 0) # Basic vertical scroll
+                pyautogui.scroll(delta_y // abs(delta_y) * 5 if delta_y else 0)
             if delta_x != 0:
-                 pyautogui.hscroll(delta_x // abs(delta_x) * 5 if delta_x else 0) # Basic horizontal scroll
+                 pyautogui.hscroll(delta_x // abs(delta_x) * 5 if delta_x else 0)
     except Exception as e:
         print(f"Error simulating mouse event: {e}")
 

@@ -2,7 +2,8 @@ import sys
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QLineEdit, QGroupBox, QRadioButton, QDialog, QMessageBox,
-    QScrollArea, QFormLayout, QMainWindow, QAction, QStatusBar, QTextEdit
+    QScrollArea, QFormLayout, QMainWindow, QAction, QStatusBar, QTextEdit,
+    QSplitter
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
@@ -246,7 +247,8 @@ class ScreenDisplayWidget(QWidget):
     def update_screen(self, image_data):
         """Loads image data into the pixmap and triggers a repaint."""
         try:
-            qimg = QImage.fromData(image_data, 'JPEG')
+            # Allow Qt to auto-detect format (PNG or JPEG)
+            qimg = QImage.fromData(image_data) # Removed format='JPEG'
             if not qimg.isNull():
                 self.pixmap = QPixmap.fromImage(qimg)
                 # Store the size of the remote screen for scaling
@@ -267,31 +269,47 @@ class ScreenDisplayWidget(QWidget):
         """Draws the received screen image."""
         painter = QPainter(self)
         if not self.pixmap.isNull():
-            # Draw the remote screen scaled to the widget size
-            painter.drawPixmap(self.rect(), self.pixmap, self.pixmap.rect())
+            # --- Draw 1:1 - let ScrollArea handle size --- 
+            painter.drawPixmap(0, 0, self.pixmap) # Draw pixmap at its native size at origin
+            # Adjust widget size hint based on pixmap size - helps ScrollArea
+            # Check if size actually changed to avoid excessive updates
+            if self.minimumSize() != self.pixmap.size():
+                self.setMinimumSize(self.pixmap.size())
+            # --- End 1:1 Draw --- 
 
             # Draw the remote cursor if position is known and not view only
             if self.remote_cursor_pos and not self._view_only:
-                # Scale remote cursor position to local widget coordinates
-                scaled_x = int(self.remote_cursor_pos[0] * self.width() / self.remote_screen_size.width())
-                scaled_y = int(self.remote_cursor_pos[1] * self.height() / self.remote_screen_size.height())
+                # Scale remote cursor position based on RECEIVED pixmap size vs ORIGINAL remote screen size
+                # This logic needs the original screen size from the sender if scaling is applied there.
+                # For now, assume remote_screen_size IS the size of the image we received (no scaling yet from sender)
+                cursor_display_x = int(self.remote_cursor_pos[0] * (self.pixmap.width() / self.remote_screen_size.width()) if self.remote_screen_size.width() > 0 else 0)
+                cursor_display_y = int(self.remote_cursor_pos[1] * (self.pixmap.height() / self.remote_screen_size.height()) if self.remote_screen_size.height() > 0 else 0)
 
                 # Draw a simple crosshair or dot for the cursor
                 painter.setPen(QPen(Qt.red, 2))
-                painter.drawLine(scaled_x - 5, scaled_y, scaled_x + 5, scaled_y)
-                painter.drawLine(scaled_x, scaled_y - 5, scaled_x, scaled_y + 5)
+                painter.drawLine(cursor_display_x - 5, cursor_display_y, cursor_display_x + 5, cursor_display_y)
+                painter.drawLine(cursor_display_x, cursor_display_y - 5, cursor_display_x, cursor_display_y + 5)
         else:
             painter.fillRect(self.rect(), Qt.black)
             painter.setPen(Qt.white)
             painter.drawText(self.rect(), Qt.AlignCenter, "Waiting for screen data...")
+            # Reset minimum size when no pixmap
+            if self.minimumSize() != QSize(800, 600):
+                self.setMinimumSize(800, 600) 
         painter.end()
 
     def get_scaled_coords(self, pos):
-         """Scales local widget coordinates to remote screen coordinates."""
-         if not self.remote_screen_size.width() > 1 or not self.remote_screen_size.height() > 1:
-             return 0, 0 # Avoid division by zero or using placeholder size
-         x = int(pos.x() * self.remote_screen_size.width() / self.width())
-         y = int(pos.y() * self.remote_screen_size.height() / self.height())
+         """Scales local widget coordinates (relative to view) to remote screen coordinates."""
+         # TEMPORARY SIMPLIFICATION: Assume 1:1 mapping when no scrollbars are active
+         # This might be wrong if scrollbars ARE active.
+         # If self.pixmap is not Null, coordinates are relative to the pixmap
+         if self.pixmap.isNull(): return 0, 0
+         x = pos.x()
+         y = pos.y()
+         
+         # Clamp coordinates to pixmap bounds
+         x = max(0, min(x, self.pixmap.width()))
+         y = max(0, min(y, self.pixmap.height()))
          return x, y
 
     # --- Input Event Handlers ---
@@ -416,13 +434,8 @@ class ScreenDisplayWidget(QWidget):
             return text
 
         # Fallback for other keys (might need more mapping)
-        print(f"Warning: Unhandled key: Qt Key={key}, Text='{text}'")
+        print(f"Unhandled key: {key}, text: {text}")
         return None
-
-# Commenting out the old ClientWindow for now to avoid name clashes
-# class ClientWindow(QWidget):
-#     # ... (old ClientWindow code) ...
-#     pass
 
 
 # --- New Main Application Window ---
@@ -431,6 +444,9 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
     connect_to_peer_signal = pyqtSignal(str) # Emits target UID
     disconnect_signal = pyqtSignal()
     send_chat_message_signal = pyqtSignal(str)
+    logout_signal = pyqtSignal() # Signal for logout request
+    start_sharing_signal = pyqtSignal() # TEMPORARY
+    stop_sharing_signal = pyqtSignal()  # TEMPORARY
     # Add more signals as needed for settings, screenshot etc.
 
     def __init__(self, username="Unknown User"): # Pass username for display
@@ -446,9 +462,14 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.exit_action = QAction("&Exit", self)
         self.exit_action.triggered.connect(self.close) # Use built-in close
 
+        self.logout_action = QAction("&Logout", self)
+        self.logout_action.triggered.connect(self.logout_signal.emit) # Emit signal on click
+
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("&File")
+        file_menu.addAction(self.logout_action) # Add logout action
+        file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
         # Add other menus (View, Tools, Help) later if needed
 
@@ -460,25 +481,27 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
     def initUI(self):
         self.setWindowTitle(f'Remote Desktop - Logged in as {self.username}')
 
-        # --- Central Widget --- 
-        central_widget = QWidget()
-        self.main_layout = QHBoxLayout(central_widget) # Main layout: Screen on left, controls/chat on right
+        # --- Main Splitter --- 
+        main_splitter = QSplitter(Qt.Horizontal)
 
-        # --- Left Side: Screen Display --- 
-        screen_container = QGroupBox("Remote Screen")
-        screen_layout = QVBoxLayout()
-        self.screen_widget = ScreenDisplayWidget() # Re-use the display widget
-        # Wrap screen widget in a scroll area just in case
+        # --- Left Side: Screen Display (as a container widget) --- 
+        left_container_widget = QWidget()
+        screen_layout = QVBoxLayout(left_container_widget)
+        screen_layout.setContentsMargins(0,0,0,0) # Remove margins if needed
+        screen_container_group = QGroupBox("Remote Screen") # Keep group box visually
+        screen_container_layout = QVBoxLayout()
+        self.screen_widget = ScreenDisplayWidget() 
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.screen_widget)
         scroll_area.setWidgetResizable(True)
-        screen_layout.addWidget(scroll_area)
-        screen_container.setLayout(screen_layout)
-        self.main_layout.addWidget(screen_container, 3) # Give screen more space (stretch factor 3)
+        screen_container_layout.addWidget(scroll_area)
+        screen_container_group.setLayout(screen_container_layout)
+        screen_layout.addWidget(screen_container_group)
+        main_splitter.addWidget(left_container_widget)
 
-
-        # --- Right Side: Controls and Chat --- 
-        right_panel_layout = QVBoxLayout()
+        # --- Right Side: Controls and Chat (as a container widget) --- 
+        right_container_widget = QWidget()
+        right_panel_layout = QVBoxLayout(right_container_widget)
 
         # Connection Controls
         connection_group = QGroupBox("Connection")
@@ -488,11 +511,16 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.uid_input.setPlaceholderText("Enter target user's ID")
         self.connect_button = QPushButton("Connect")
         self.disconnect_button = QPushButton("Disconnect")
-        self.disconnect_button.setEnabled(False) # Disabled initially
+        self.disconnect_button.setEnabled(False) 
+        self.start_sharing_button = QPushButton("TEMP: Start Sharing Screen")
+        self.stop_sharing_button = QPushButton("TEMP: Stop Sharing Screen")
+        self.stop_sharing_button.setEnabled(False)
         connection_layout.addWidget(self.connect_label)
         connection_layout.addWidget(self.uid_input)
         connection_layout.addWidget(self.connect_button)
         connection_layout.addWidget(self.disconnect_button)
+        connection_layout.addWidget(self.start_sharing_button)
+        connection_layout.addWidget(self.stop_sharing_button)
         connection_group.setLayout(connection_layout)
         right_panel_layout.addWidget(connection_group)
 
@@ -503,30 +531,34 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.chat_display.setReadOnly(True)
         self.chat_input = QLineEdit()
         self.chat_input.setPlaceholderText("Type message and press Enter...")
-        self.chat_send_button = QPushButton("Send") # Optional send button
+        self.chat_send_button = QPushButton("Send")
         chat_input_layout = QHBoxLayout()
         chat_input_layout.addWidget(self.chat_input)
         chat_input_layout.addWidget(self.chat_send_button)
-        chat_layout.addWidget(self.chat_display, 1) # Give display more space
+        chat_layout.addWidget(self.chat_display, 1)
         chat_layout.addLayout(chat_input_layout)
         chat_group.setLayout(chat_layout)
         right_panel_layout.addWidget(chat_group)
 
-        right_panel_layout.addStretch() # Push controls up
+        right_panel_layout.addStretch() 
+        main_splitter.addWidget(right_container_widget)
 
-        self.main_layout.addLayout(right_panel_layout, 1) # Give controls less space (stretch factor 1)
+        # Set Splitter Ratios (optional initial sizing)
+        main_splitter.setStretchFactor(0, 3) # Index 0 (left) gets stretch factor 3
+        main_splitter.setStretchFactor(1, 1) # Index 1 (right) gets stretch factor 1
+        # Or set fixed sizes initially
+        # main_splitter.setSizes([800, 300]) 
 
-        self.setCentralWidget(central_widget)
+        # Set the splitter as the central widget
+        self.setCentralWidget(main_splitter)
 
         # --- Connect Signals --- 
         self.connect_button.clicked.connect(self.on_connect_clicked)
-        self.disconnect_button.clicked.connect(self.disconnect_signal.emit) # Directly emit signal
+        self.disconnect_button.clicked.connect(self.disconnect_signal.emit)
         self.chat_input.returnPressed.connect(self.on_chat_send)
         self.chat_send_button.clicked.connect(self.on_chat_send)
-
-        # Connect screen widget signals (for sending input later)
-        # self.screen_widget.mouse_event_signal.connect(...) # Connect in main controller
-        # self.screen_widget.key_event_signal.connect(...)   # Connect in main controller
+        self.start_sharing_button.clicked.connect(self.on_start_sharing_clicked)
+        self.stop_sharing_button.clicked.connect(self.on_stop_sharing_clicked)
 
         self.resize(1200, 700)
         self.show()
@@ -578,9 +610,15 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
     def update_remote_cursor(self, x, y):
         self.screen_widget.update_remote_cursor(x, y)
 
-    # Override closeEvent to emit disconnect signal if connected?
-    # Or handle this in the main controller's cleanup.
-    # def closeEvent(self, event):
-    #     # self.disconnect_signal.emit() # Maybe?
-    #     super().closeEvent(event)
+    # --- TEMPORARY: Add handler methods for buttons ---
+    def on_start_sharing_clicked(self):
+        self.start_sharing_signal.emit()
+        self.start_sharing_button.setEnabled(False)
+        self.stop_sharing_button.setEnabled(True)
+
+    def on_stop_sharing_clicked(self):
+        self.stop_sharing_signal.emit()
+        self.start_sharing_button.setEnabled(True)
+        self.stop_sharing_button.setEnabled(False)
+    # --- END TEMPORARY ---
 

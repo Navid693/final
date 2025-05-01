@@ -13,6 +13,7 @@ class WebSocketHandler(QObject):
     disconnected_signal = pyqtSignal(str) # Reason for disconnection
     error_signal = pyqtSignal(str)        # Error message
     message_received_signal = pyqtSignal(dict) # Emits the received dictionary/JSON
+    binary_message_received_signal = pyqtSignal(bytes) # Signal for raw binary data
     status_update_signal = pyqtSignal(str) # General status updates
 
     def __init__(self, ws_url, token):
@@ -72,7 +73,8 @@ class WebSocketHandler(QObject):
                 on_close=self._on_close
             )
             # run_forever will block this thread until connection closes
-            self.ws.run_forever(ping_interval=20, ping_timeout=10) # Add keep-alive pings
+            # Increase timeout slightly for testing robustness
+            self.ws.run_forever(ping_interval=20, ping_timeout=15)
 
         except Exception as e:
             print(f"WebSocket _run exception: {e}")
@@ -103,20 +105,22 @@ class WebSocketHandler(QObject):
         # self.send_message({'type': 'auth', 'token': self.token}) # Example
 
     def _on_message(self, ws, message):
-        """Callback when a message is received."""
-        # print(f"Raw WS Message Received: {message[:100]}...") # Print raw for debug
-        try:
-            # Assuming messages are JSON strings
-            data = json.loads(message)
-            # print(f"Parsed WS Message: {data}")
-            self.message_received_signal.emit(data)
-        except json.JSONDecodeError:
-            print(f"Received non-JSON message: {message}")
-            # Handle binary data (like screen stream) if needed
-            # For now, we expect JSON for control/chat
-            # Maybe emit raw data on a different signal if required?
-        except Exception as e:
-            print(f"Error processing message: {e}")
+        """Callback when a message is received. Differentiates text/binary."""
+        if isinstance(message, bytes):
+            # print(f"Received Binary Message: {len(message)} bytes")
+            self.binary_message_received_signal.emit(message)
+        elif isinstance(message, str):
+            # Assume text messages are JSON
+            # print(f"Raw Text Message Received: {message[:100]}...")
+            try:
+                data = json.loads(message)
+                self.message_received_signal.emit(data)
+            except json.JSONDecodeError:
+                print(f"Received non-JSON text message: {message}")
+            except Exception as e:
+                print(f"Error processing text message: {e}")
+        else:
+            print(f"Received unexpected message type: {type(message)}")
 
     def _on_error(self, ws, error):
         """Callback when a WebSocket error occurs."""
@@ -149,17 +153,27 @@ class WebSocketHandler(QObject):
         if self.ws and self._is_running and self._connection_established:
             try:
                 message = json.dumps(data)
-                # print(f"Sending WS Message: {message}")
-                self.ws.send(message)
+                self.ws.send(message, websocket.ABNF.OPCODE_TEXT) # Specify TEXT frame
             except Exception as e:
-                print(f"Error sending message: {e}")
+                print(f"Error sending text message: {e}")
                 self.status_update_signal.emit(f"WebSocket Send Error: {e}")
-                # Consider triggering disconnection on send error
-                self.stop() # Stop connection if send fails
+                self.stop()
         else:
-            print("Cannot send message: WebSocket is not connected or running.")
+            print("Cannot send text message: WebSocket is not connected or running.")
             self.status_update_signal.emit("WebSocket: Cannot send, not connected.")
 
+    def send_binary_message(self, data_bytes):
+        """Sends raw bytes over the WebSocket."""
+        if self.ws and self._is_running and self._connection_established:
+            try:
+                self.ws.send(data_bytes, websocket.ABNF.OPCODE_BINARY) # Specify BINARY frame
+            except Exception as e:
+                print(f"Error sending binary message: {e}")
+                self.status_update_signal.emit(f"WebSocket Send Error: {e}")
+                self.stop()
+        else:
+            print("Cannot send binary message: WebSocket is not connected or running.")
+            self.status_update_signal.emit("WebSocket: Cannot send, not connected.")
 
     def stop(self):
         """Closes the WebSocket connection."""
