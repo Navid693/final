@@ -1,0 +1,11 @@
+    __pycache__/
+    *.log
+    .vscode/
+    *.rar
+    *.zip
+    *.7z
+    *.tar
+    *.gz
+    *.bz2
+    *.wim
+    *.pyc

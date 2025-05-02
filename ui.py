@@ -6,34 +6,35 @@ from PyQt5.QtWidgets import (
     QSplitter, QSlider, QSpinBox, QComboBox, QCheckBox, QSizePolicy, QPlainTextEdit,
     QSpacerItem, QFrame # Import QSpacerItem and QFrame
 )
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont, QPalette, QIcon
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont, QPalette, QIcon, QPaintEvent, QMouseEvent, QWheelEvent , QKeyEvent , QPaintEvent 
 from PyQt5.QtCore import (
-    Qt, QSize, QTimer, QThread, QMutex, pyqtSignal, pyqtSlot, QEvent, 
+    Qt, QSize, QTimer, QThread, QMutex, pyqtSignal, pyqtSlot, QEvent,
     QPoint, QRect, QPropertyAnimation, QEasingCurve # Added QPropertyAnimation and QEasingCurve
 )
-import utils # Import utils to get monitor list
+# Removed utils import as it's not directly needed here anymore for monitors
 import screeninfo # To get monitor info
 import time
 
+# --- Login Window ---
 class LoginWindow(QWidget):
     """Window for user login."""
     # Signal emits backend_url, username, password
     login_attempt_signal = pyqtSignal(str, str, str)
     toggle_theme_signal = pyqtSignal() # Signal to toggle theme
-    # Add signals for new buttons if needed later
-    # register_signal = pyqtSignal()
-    # guest_login_signal = pyqtSignal()
+    # ADDED: Signal for registration request
+    register_signal = pyqtSignal()
 
     def __init__(self, default_backend_url="http://127.0.0.1:8000"): # Default to localhost backend
         super().__init__()
         self.default_backend_url = default_backend_url
-        self.initUI()
+        self._initUI() # Renamed internal method
 
-    def initUI(self):
-        self.setWindowTitle("SCU Remote Desktop - Login") # Changed title
-        self.setMinimumWidth(400) # Give it a bit more width
+    def _initUI(self):
+        """Initializes the Login Window UI elements."""
+        self.setWindowTitle("SCU Remote Desktop - Login")
+        self.setMinimumWidth(400)
 
-        # --- Top Layout (for Title Bar elements) --- 
+        # --- Top Layout (for Title Bar elements) ---
         top_layout = QHBoxLayout()
         top_layout.addStretch(1) # Push button to the right
 
@@ -41,42 +42,35 @@ class LoginWindow(QWidget):
         self.theme_button = QPushButton()
         self.theme_button.setObjectName("theme_button")
         self.theme_button.setToolTip("Toggle Light/Dark Mode")
-        self.theme_button.setFlat(True) # Make background transparent initially
+        self.theme_button.setFlat(True)
         self.theme_button.setCursor(Qt.PointingHandCursor)
-        
-        # Set initial size and styling for emoji
         self.theme_button.setMinimumSize(35, 35)
-        font = self.theme_button.font()
-        font.setPointSize(14)  # Larger font for emoji
-        self.theme_button.setFont(font)
-        
-        # Initialize with the dark theme icon (sun emoji)
+        font_theme = self.theme_button.font()
+        font_theme.setPointSize(14) # Larger font for emoji
+        self.theme_button.setFont(font_theme)
         self._update_theme_icon("dark") # Assume starting dark
         self.theme_button.clicked.connect(self.toggle_theme_signal.emit) # Emit signal
         top_layout.addWidget(self.theme_button)
 
-        # --- Main Content Layout --- 
+        # --- Main Content Layout ---
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(30, 0, 30, 30) # Adjust margins
         content_layout.setSpacing(15) # Add spacing between elements
 
         # Logo Placeholder
-        self.logo_label = QLabel("SCU Logo Placeholder") # Placeholder
-        self.logo_label.setObjectName("logo_label") # Set object name
+        self.logo_label = QLabel("SCU Logo Placeholder")
+        self.logo_label.setObjectName("logo_label")
         self.logo_label.setAlignment(Qt.AlignCenter)
-        # --- Load actual logo --- 
-        pixmap = QPixmap('logo.png') 
+        pixmap = QPixmap('Icons/logo.png') # TODO: Ensure Icons/logo.png is available
         if not pixmap.isNull():
-             # Scale the logo while keeping aspect ratio
-             self.logo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
-             self.logo_label.setText("[Logo Not Found]") # Fallback text
-        # --- End Load actual logo --- 
+            self.logo_label.setText("[Logo Not Found]") # Fallback text
         content_layout.addWidget(self.logo_label)
 
         # Title Labels
         self.title_label1 = QLabel("SCU Remote Desktop")
-        self.title_label1.setObjectName("title_label1") # Set object name
+        self.title_label1.setObjectName("title_label1")
         self.title_label1.setAlignment(Qt.AlignCenter)
         font1 = self.title_label1.font()
         font1.setPointSize(14)
@@ -85,17 +79,16 @@ class LoginWindow(QWidget):
         content_layout.addWidget(self.title_label1)
 
         self.title_label2 = QLabel("Remote Control System")
-        self.title_label2.setObjectName("title_label2") # Set object name
+        self.title_label2.setObjectName("title_label2")
         self.title_label2.setAlignment(Qt.AlignCenter)
         font2 = self.title_label2.font()
         font2.setPointSize(10)
         self.title_label2.setFont(font2)
         content_layout.addWidget(self.title_label2)
 
-        # Spacer
-        content_layout.addSpacing(20)
+        content_layout.addSpacing(20) # Spacer
 
-        # Backend URL (Kept for now)
+        # Backend URL
         self.backend_label = QLabel("Backend URL:")
         self.backend_label.setObjectName("backend_label")
         self.backend_input = QLineEdit(self)
@@ -114,77 +107,72 @@ class LoginWindow(QWidget):
         self.password_label = QLabel("Password:")
         self.password_label.setObjectName("password_label")
         self.password_input = QLineEdit(self)
-        self.password_input.setEchoMode(QLineEdit.Password) 
-        self.password_input.setPlaceholderText("Enter your password") # Added placeholder
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setPlaceholderText("Enter your password")
         content_layout.addWidget(self.password_label)
         content_layout.addWidget(self.password_input)
 
         # Remember Me Checkbox
         self.remember_checkbox = QCheckBox("Remember Me")
-        self.remember_checkbox.setObjectName("remember_checkbox")  # Set object name for styling
-        self.remember_checkbox.setChecked(False)  # Initially unchecked
+        self.remember_checkbox.setObjectName("remember_checkbox")
+        self.remember_checkbox.setChecked(False) # Initially unchecked
         self.remember_checkbox.stateChanged.connect(self.on_remember_me_changed)
         content_layout.addWidget(self.remember_checkbox)
         content_layout.addSpacing(10) # Spacer before buttons
 
         # Login Button
         self.login_button = QPushButton("Login", self)
-        self.login_button.setObjectName("login_button") # Set object name for styling
+        self.login_button.setObjectName("login_button")
         self.login_button.clicked.connect(self.attempt_login)
         self.login_button.setDefault(True) # Allow Enter key to trigger login
         content_layout.addWidget(self.login_button)
 
         # Register Button
         self.register_button = QPushButton("Register", self)
-        self.register_button.setObjectName("register_button") # Set object name
-        self.register_button.clicked.connect(self.register_clicked)  # Connected to new handler
+        self.register_button.setObjectName("register_button")
+        # MODIFIED: Connect to signal instead of showing message box directly
+        self.register_button.clicked.connect(self.register_signal.emit)
         content_layout.addWidget(self.register_button)
-        
-        # Guest Login Button removed as requested
 
         # Error Label (Initially Hidden)
         self.error_label = QLabel("", self)
         self.error_label.setObjectName("error_label")
         self.error_label.setAlignment(Qt.AlignCenter)
-        # self.error_label.setStyleSheet("color: #FF6B6B;") # Style using QSS file
         content_layout.addWidget(self.error_label)
         self.error_label.hide()
 
-        # --- Combine Layouts --- 
+        # --- Combine Layouts ---
         main_layout = QVBoxLayout(self) # Overall layout for the window
         main_layout.setContentsMargins(0, 5, 0, 0) # Only top margin for top_layout
         main_layout.addLayout(top_layout) # Add theme button layout at the top
         main_layout.addLayout(content_layout) # Add main content below
 
-        # Set focus initially
-        self.username_input.setFocus()
+        self.username_input.setFocus() # Set initial focus
 
-    # --- Method to update theme button icon --- 
     def _update_theme_icon(self, theme_name):
+        """Updates the theme toggle button icon and tooltip."""
         if theme_name == "dark":
-            emoji = "☀️"  # Sun emoji for dark mode (switch to light)
+            emoji = "☀️" # Sun emoji for dark mode (switch to light)
             tooltip = "Switch to Light Mode"
         else:
-            emoji = "🌙"  # Moon emoji for dark mode (switch to dark) 
+            emoji = "🌙" # Moon emoji for light mode (switch to dark)
             tooltip = "Switch to Dark Mode"
-            
-        # Set the text directly to the emoji
+
         self.theme_button.setText(emoji)
-        self.theme_button.setIcon(QIcon())  # Clear any icon
+        self.theme_button.setIcon(QIcon()) # Clear any potential icon
         self.theme_button.setToolTip(tooltip)
-        
-        # The font size is already set in CSS, but we'll ensure it's set here as well
-        # for systems that might override it
+        # Ensure font size remains correct
         font = self.theme_button.font()
-        font.setPointSize(14)  # Larger font for emoji
+        font.setPointSize(14) # Larger font for emoji
         self.theme_button.setFont(font)
 
     def attempt_login(self):
+        """Validates input and emits login_attempt_signal."""
         backend_url = self.backend_input.text().strip()
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
-        if not backend_url or not username:
+        if not backend_url or not username: # Basic validation
             self.show_error("Backend URL and Username are required.")
             return
 
@@ -195,156 +183,29 @@ class LoginWindow(QWidget):
         self.login_attempt_signal.emit(backend_url, username, password)
 
     def show_error(self, message):
-        # Display error in the label instead of message box
+        """Displays an error message on the login screen."""
         self.error_label.setText(message)
         self.error_label.show()
-        # Re-enable button
+        # Re-enable button and reset text after error
         self.login_button.setEnabled(True)
         self.login_button.setText("Login")
 
     def set_logging_in(self):
-        # Disable button and show progress indication
+        """Updates UI to show 'logging in' state."""
         self.login_button.setEnabled(False)
         self.login_button.setText("Logging In...")
-        self.error_label.hide()
+        self.error_label.hide() # Hide error during attempt
 
     def on_remember_me_changed(self, state):
-        # This method is called when the state of the "Remember Me" checkbox changes
-        # You can implement the logic to save the checkbox state to a file or a database
-        # For example, you can use a configuration file to store the state
-        print(f"[UI LoginWindow] Remember Me checkbox toggled: {state}")
-        # Here, we'll just print the state
+        """Handles state change of the 'Remember Me' checkbox."""
+        # TODO: Implement logic to save/load credentials securely if checked
+        print(f"[UI LoginWindow] Remember Me checkbox toggled: {state == Qt.Checked}")
 
-    def register_clicked(self):
-        # Display a dialog or navigate to the registration page
-        # For now, just display a message that registration functionality is coming soon
-        QMessageBox.information(self, "Registration", "Registration functionality is coming soon!")
-        # In the future, this could emit a signal to open a registration form or dialog
-        # self.register_signal.emit()
+# --- REMOVED: InitialWindow and HostWindow classes ---
+# These classes were part of an older Host/Client connection model
+# and are not used in the new WebSocket/Backend architecture.
 
-class InitialWindow(QWidget):
-    """Window to choose between Host and Client mode."""
-    start_host_signal = pyqtSignal()
-    connect_client_signal = pyqtSignal(str, int) # Emits host IP (str) and port (int)
-
-    def __init__(self, local_ip, default_port):
-        super().__init__()
-        self.local_ip = local_ip
-        self.default_port = default_port # Store default port
-        self.initUI()
-
-    def initUI(self):
-        self.setWindowTitle('Remote Desktop Control')
-
-        layout = QVBoxLayout()
-
-        # --- Host Section ---
-        host_group = QGroupBox("Start as Host")
-        host_layout = QVBoxLayout()
-        self.ip_label = QLabel(f"Your IP Address: {self.local_ip}:{self.default_port}")
-        self.start_host_button = QPushButton('Start Hosting')
-        self.start_host_button.clicked.connect(self.start_host)
-        host_layout.addWidget(self.ip_label)
-        host_layout.addWidget(self.start_host_button)
-        host_group.setLayout(host_layout)
-
-        # --- Client Section ---
-        client_group = QGroupBox("Connect to Host")
-        client_layout = QVBoxLayout()
-        # IP Input
-        ip_layout = QHBoxLayout() # Use horizontal layout for IP label and input
-        self.ip_input_label = QLabel("Host IP:")
-        self.ip_input = QLineEdit()
-        self.ip_input.setPlaceholderText("e.g., 192.168.1.10")
-        ip_layout.addWidget(self.ip_input_label)
-        ip_layout.addWidget(self.ip_input)
-        client_layout.addLayout(ip_layout) # Add the horizontal layout
-
-        # Port Input
-        port_layout = QHBoxLayout() # Use horizontal layout for Port label and input
-        self.port_input_label = QLabel("Port:")
-        self.port_input = QLineEdit()
-        self.port_input.setPlaceholderText(f"Default: {self.default_port}") # Show default in placeholder
-        # Optional: Set fixed width for port input
-        self.port_input.setMaximumWidth(80)
-        port_layout.addWidget(self.port_input_label)
-        port_layout.addWidget(self.port_input)
-        port_layout.addStretch() # Push port input to the left
-        client_layout.addLayout(port_layout) # Add the horizontal layout
-
-        self.connect_button = QPushButton('Connect')
-        self.connect_button.clicked.connect(self.connect_client)
-        client_layout.addWidget(self.connect_button)
-        client_group.setLayout(client_layout)
-
-        layout.addWidget(host_group)
-        layout.addWidget(client_group)
-
-        self.setLayout(layout)
-        self.show()
-
-    def start_host(self):
-        self.start_host_signal.emit()
-        self.close()
-
-    def connect_client(self):
-        host_ip = self.ip_input.text().strip()
-        port_str = self.port_input.text().strip()
-        port = self.default_port # Use default initially
-
-        if not host_ip:
-            QMessageBox.warning(self, "Input Error", "Please enter the Host IP address.")
-            return
-
-        if port_str: # If user entered a port
-            try:
-                port = int(port_str)
-                if not (0 < port < 65536):
-                    raise ValueError("Port must be between 1 and 65535")
-            except ValueError as e:
-                 QMessageBox.warning(self, "Input Error", f"Invalid Port Number: {e}")
-                 return
-
-        # Emit both IP and Port
-        self.connect_client_signal.emit(host_ip, port)
-        self.close()
-
-class HostWindow(QWidget):
-    """Window displayed on the host machine."""
-    stop_host_signal = pyqtSignal()
-
-    def __init__(self, ip_address, port):
-        super().__init__()
-        self.ip_address = ip_address
-        self.port = port
-        self.initUI()
-
-    def initUI(self):
-        self.setWindowTitle('Hosting - Remote Desktop')
-        layout = QVBoxLayout()
-        self.status_label = QLabel(f"Hosting on {self.ip_address}:{self.port}\nWaiting for connection...")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.stop_button = QPushButton("Stop Hosting")
-        self.stop_button.clicked.connect(self.stop_hosting)
-
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.stop_button)
-        self.setLayout(layout)
-        self.show()
-
-    def update_status(self, status):
-        self.status_label.setText(status)
-
-    def stop_hosting(self):
-        self.stop_host_signal.emit()
-        self.close()
-
-    def closeEvent(self, event):
-        # Ensure the signal is emitted even if the window is closed manually
-        self.stop_host_signal.emit()
-        event.accept()
-
-
+# --- Screen Display Widget ---
 class ScreenDisplayWidget(QWidget):
     """Widget to display the remote screen and capture input."""
     mouse_event_signal = pyqtSignal(dict)
@@ -356,673 +217,652 @@ class ScreenDisplayWidget(QWidget):
         self.setMinimumSize(800, 600) # Start with a reasonable size
         self.setFocusPolicy(Qt.StrongFocus) # To receive keyboard events
         self.setMouseTracking(True) # Receive mouse move events without clicking
-        self.remote_screen_size = QSize(1, 1) # Placeholder
-        self._view_only = False
-        self.setCursor(Qt.BlankCursor) # Hide local cursor
-        self.remote_cursor_pos = None
-        self._fit_to_window = False # Add state for fit-to-window
+        self.remote_screen_size = QSize(1, 1) # Placeholder, updated on first frame
+        self._view_only = True # Start in view-only mode
+        self._fit_to_window = False # Start in 1:1 mode
+        self.remote_cursor_pos = None # Store position like (x, y)
+
+        self.setCursor(Qt.ArrowCursor) # Show local cursor initially (since view_only is True)
+        self.setObjectName("ScreenDisplayWidget") # For styling if needed
 
     def set_view_only(self, view_only):
+        """Enable/disable sending input events."""
+        print(f"[UI ScreenDisplay] Setting view_only: {view_only}") # Log state change
         self._view_only = view_only
         if view_only:
-             self.setCursor(Qt.ArrowCursor) # Show local cursor if view only
+            self.setCursor(Qt.ArrowCursor) # Show local cursor if view only
         else:
-             self.setCursor(Qt.BlankCursor)
+            self.setCursor(Qt.BlankCursor) # Hide local cursor when controlling
 
     def update_screen(self, image_data):
         """Loads image data into the pixmap and triggers a repaint."""
         try:
-            # Allow Qt to auto-detect format (PNG or JPEG)
-            qimg = QImage.fromData(image_data) # Removed format='JPEG'
+            qimg = QImage.fromData(image_data) # Allow Qt to auto-detect format
             if not qimg.isNull():
                 self.pixmap = QPixmap.fromImage(qimg)
-                # Store the size of the remote screen for scaling
-                self.remote_screen_size = self.pixmap.size()
-                self.updateGeometry()
+                new_size = self.pixmap.size()
+                if self.remote_screen_size != new_size:
+                     print(f"[UI ScreenDisplay] Received frame, remote size: {new_size.width()}x{new_size.height()}")
+                     self.remote_screen_size = new_size
+                self.updateGeometry() # Recalculate size hint if needed
                 self.update() # Schedule a repaint
             else:
-                 print("Failed to load image from data")
+                print("[UI ScreenDisplay WARNING] Failed to load image from data.")
         except Exception as e:
-            print(f"Error updating screen: {e}")
+            print(f"[UI ScreenDisplay ERROR] Error updating screen: {e}")
 
     def update_remote_cursor(self, x, y):
         """Stores the remote cursor position to draw it."""
         self.remote_cursor_pos = (x, y)
-        self.update() # Redraw to show cursor
+        self.update() # Redraw to show new cursor position
 
     def set_fit_to_window(self, fit):
         """Sets the fit-to-window mode and triggers repaint."""
-        print(f"[UI ScreenDisplayWidget] Setting fit_to_window: {fit}") # LOG
+        print(f"[UI ScreenDisplay] Setting fit_to_window: {fit}")
         if self._fit_to_window != fit:
             self._fit_to_window = fit
             self.updateGeometry() # May need size adjustment
             self.update() # Request repaint
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent):
+        """Paints the screen pixmap and remote cursor."""
         painter = QPainter(self)
-        if not self.pixmap.isNull():
-            target_rect = self.rect()
-            pixmap_size = self.pixmap.size()
-            # LOG: Log paint event mode
-            # print(f"[UI ScreenDisplayWidget] paintEvent - Fit: {self._fit_to_window}, Widget Rect: {target_rect}, Pixmap Size: {pixmap_size}") 
+        painter.setRenderHint(QPainter.SmoothPixmapTransform) # Nicer scaling
 
-            scaled_pixmap = self.pixmap # Assign default
-            x, y = 0, 0 # Default offsets
+        if not self.pixmap.isNull():
+            target_rect = self.rect() # Area to draw into
+            pixmap_size = self.pixmap.size()
+            scaled_pixmap = self.pixmap
+            draw_pos = QPoint(0, 0) # Top-left corner by default
 
             if self._fit_to_window:
                 # Scale pixmap to fit widget while preserving aspect ratio
                 scaled_pixmap = self.pixmap.scaled(target_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                x = (target_rect.width() - scaled_pixmap.width()) / 2
-                y = (target_rect.height() - scaled_pixmap.height()) / 2
-                painter.drawPixmap(int(x), int(y), scaled_pixmap)
-                # Ensure widget can shrink if needed when fitting
-                # self.setMinimumSize(1, 1) # Or something small?
+                # Center the scaled pixmap
+                draw_pos.setX(int((target_rect.width() - scaled_pixmap.width()) / 2))
+                draw_pos.setY(int((target_rect.height() - scaled_pixmap.height()) / 2))
             else:
-                painter.drawPixmap(int(x), int(y), scaled_pixmap) # Draw at 0,0
+                # Ensure widget minimum size matches pixmap in 1:1 mode
                 if self.minimumSize() != pixmap_size:
                     self.setMinimumSize(pixmap_size)
 
-            # Draw remote cursor
+            # Draw the screen pixmap
+            painter.drawPixmap(draw_pos, scaled_pixmap)
+
+            # Draw remote cursor (if available and not in view-only)
             if self.remote_cursor_pos and not self._view_only:
-                cursor_display_x, cursor_display_y = 0, 0
-                if self._fit_to_window and pixmap_size.width() > 0 and pixmap_size.height() > 0 and scaled_pixmap.width() > 0 and scaled_pixmap.height() > 0:
+                cursor_widget_x, cursor_widget_y = 0, 0
+                # Scale cursor position based on how pixmap was drawn
+                if self._fit_to_window and pixmap_size.width() > 0 and pixmap_size.height() > 0 and scaled_pixmap.width() > 0:
                     scale_ratio_x = scaled_pixmap.width() / pixmap_size.width()
                     scale_ratio_y = scaled_pixmap.height() / pixmap_size.height()
-                    cursor_display_x = int(self.remote_cursor_pos[0] * scale_ratio_x + x)
-                    cursor_display_y = int(self.remote_cursor_pos[1] * scale_ratio_y + y)
-                else:
-                    # 1:1 calculation or if scaling failed
-                    cursor_display_x = int(self.remote_cursor_pos[0])
-                    cursor_display_y = int(self.remote_cursor_pos[1])
+                    cursor_widget_x = int(self.remote_cursor_pos[0] * scale_ratio_x + draw_pos.x())
+                    cursor_widget_y = int(self.remote_cursor_pos[1] * scale_ratio_y + draw_pos.y())
+                else: # 1:1 or error case
+                    cursor_widget_x = int(self.remote_cursor_pos[0])
+                    cursor_widget_y = int(self.remote_cursor_pos[1])
 
                 # Clamp cursor display coords to widget bounds for safety
-                cursor_display_x = max(0, min(cursor_display_x, target_rect.width() -1))
-                cursor_display_y = max(0, min(cursor_display_y, target_rect.height() -1))
-                
-                # Draw cursor
+                cursor_widget_x = max(0, min(cursor_widget_x, target_rect.width() - 1))
+                cursor_widget_y = max(0, min(cursor_widget_y, target_rect.height() - 1))
+
+                # Draw cursor (e.g., a red cross)
                 painter.setPen(QPen(Qt.red, 2))
-                painter.drawLine(cursor_display_x - 5, cursor_display_y, cursor_display_x + 5, cursor_display_y)
-                painter.drawLine(cursor_display_x, cursor_display_y - 5, cursor_display_x, cursor_display_y + 5)
+                painter.drawLine(cursor_widget_x - 7, cursor_widget_y, cursor_widget_x + 7, cursor_widget_y)
+                painter.drawLine(cursor_widget_x, cursor_widget_y - 7, cursor_widget_x, cursor_widget_y + 7)
         else:
-            painter.fillRect(self.rect(), Qt.black)
-            painter.setPen(Qt.white)
+            # Draw placeholder if no screen data
+            painter.fillRect(self.rect(), QPalette().color(QPalette.Dark)) # Use theme color
+            painter.setPen(QPalette().color(QPalette.WindowText)) # Use theme text color
             painter.drawText(self.rect(), Qt.AlignCenter, "Waiting for screen data...")
             # Reset minimum size when no pixmap
             if self.minimumSize() != QSize(800, 600):
-                self.setMinimumSize(800, 600) 
+                self.setMinimumSize(800, 600)
+
         painter.end()
 
-    def get_scaled_coords(self, widget_pos):
-         """ Converts widget coordinates to original remote screen coordinates. """
-         if self.pixmap.isNull() or self.pixmap.width() == 0 or self.pixmap.height() == 0:
-              # print("[get_scaled_coords] No pixmap or zero size.")
-              return 0, 0
-         
-         pixmap_size = self.pixmap.size()
-         widget_rect = self.rect()
-         widget_x = widget_pos.x()
-         widget_y = widget_pos.y()
-         
-         original_x = 0
-         original_y = 0
+    def get_scaled_coords(self, widget_pos: QPoint) -> tuple[int, int]:
+        """ Converts widget coordinates (e.g., from mouse event) to original remote screen coordinates. """
+        if self.pixmap.isNull() or self.remote_screen_size.width() <= 1 or self.remote_screen_size.height() <= 1:
+             # print("[get_scaled_coords] No pixmap or invalid remote size.")
+             return 0, 0 # Cannot scale
 
-         if self._fit_to_window:
-              # Calculate the size and position of the displayed pixmap (keeping aspect ratio)
-              scaled_pixmap = self.pixmap.scaled(widget_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-              scaled_width = scaled_pixmap.width()
-              scaled_height = scaled_pixmap.height()
-              offset_x = (widget_rect.width() - scaled_width) / 2
-              offset_y = (widget_rect.height() - scaled_height) / 2
+        widget_rect = self.rect()
+        original_x, original_y = 0, 0
 
-              # Check if click is within the bounds of the *displayed* pixmap
-              if scaled_width > 0 and scaled_height > 0 and \
-                 offset_x <= widget_x < offset_x + scaled_width and \
-                 offset_y <= widget_y < offset_y + scaled_height:
-                  
-                  # Calculate position relative to the top-left of the scaled pixmap
-                  x_in_scaled = widget_x - offset_x
-                  y_in_scaled = widget_y - offset_y
-                  
-                  # Convert back to original coordinates using the scaling ratio
-                  original_x = (x_in_scaled / scaled_width) * pixmap_size.width()
-                  original_y = (y_in_scaled / scaled_height) * pixmap_size.height()
-              else:
-                   # Click was outside the image area (in padding) - treat as edge case
-                   print("[get_scaled_coords Fit] Click outside image area.")
-                   # Return coords clamped to the original edge? Or (0,0)? Clamp for now.
-                   # Determine which edge is closest based on relative position
-                   rel_x = widget_x - offset_x
-                   rel_y = widget_y - offset_y
-                   if rel_x < 0: original_x = 0
-                   elif rel_x >= scaled_width: original_x = pixmap_size.width()
-                   else: original_x = (rel_x / scaled_width) * pixmap_size.width() # Should not happen based on outer check
+        if self._fit_to_window:
+            # Calculate the displayed pixmap's rect (centered, aspect-preserved)
+            scaled_pixmap = self.pixmap.scaled(widget_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled_width = scaled_pixmap.width()
+            scaled_height = scaled_pixmap.height()
+            offset_x = (widget_rect.width() - scaled_width) / 2
+            offset_y = (widget_rect.height() - scaled_height) / 2
 
-                   if rel_y < 0: original_y = 0
-                   elif rel_y >= scaled_height: original_y = pixmap_size.height()
-                   else: original_y = (rel_y / scaled_height) * pixmap_size.height()
-         else:
-              # 1:1 mode - Coordinates are relative to the widget origin
-              # Ensure click is within the pixmap bounds displayed at (0,0)
-              original_x = widget_x
-              original_y = widget_y
+            if scaled_width <= 0 or scaled_height <= 0: return 0,0 # Avoid division by zero
 
-         # Final clamp to ensure coords are within the original image dimensions
-         final_x = max(0, min(int(original_x), pixmap_size.width() - 1))
-         final_y = max(0, min(int(original_y), pixmap_size.height() - 1))
-         
-         # print(f"[get_scaled_coords] Fit:{self._fit_to_window}, Widget:{widget_x},{widget_y} -> Original:{final_x},{final_y}")
-         return final_x, final_y
+            # Check if click is within the bounds of the *displayed* pixmap
+            if offset_x <= widget_pos.x() < offset_x + scaled_width and \
+               offset_y <= widget_pos.y() < offset_y + scaled_height:
+                # Position relative to the top-left of the scaled pixmap
+                x_in_scaled = widget_pos.x() - offset_x
+                y_in_scaled = widget_pos.y() - offset_y
+                # Convert back to original coordinates
+                original_x = (x_in_scaled / scaled_width) * self.remote_screen_size.width()
+                original_y = (y_in_scaled / scaled_height) * self.remote_screen_size.height()
+            else:
+                # Click was outside image (in padding), clamp to nearest edge? Let's just return clamped value based on relative position
+                rel_x = widget_pos.x() - offset_x
+                rel_y = widget_pos.y() - offset_y
+                if rel_x < 0: original_x = 0
+                elif rel_x >= scaled_width: original_x = self.remote_screen_size.width()
+                else: original_x = (rel_x / scaled_width) * self.remote_screen_size.width()
+
+                if rel_y < 0: original_y = 0
+                elif rel_y >= scaled_height: original_y = self.remote_screen_size.height()
+                else: original_y = (rel_y / scaled_height) * self.remote_screen_size.height()
+        else:
+            # 1:1 mode - Coordinates are directly relative to widget origin
+            # We assume the scroll area handles the view, so widget_pos IS the coordinate within the full remote screen
+            original_x = widget_pos.x()
+            original_y = widget_pos.y()
+
+        # Final clamp to ensure coords are within the original image dimensions
+        final_x = max(0, min(int(original_x), self.remote_screen_size.width() - 1))
+        final_y = max(0, min(int(original_y), self.remote_screen_size.height() - 1))
+
+        # print(f"[get_scaled_coords] Fit:{self._fit_to_window}, Widget:{widget_pos.x()},{widget_pos.y()} -> Original:{final_x},{final_y}")
+        return final_x, final_y
 
     # --- Input Event Handlers ---
-    def mouseMoveEvent(self, event):
-        if self._view_only:
-            return
+    # These emit signals ONLY if view_only is False
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self._view_only: return
         x, y = self.get_scaled_coords(event.pos())
-        # Also update the locally drawn remote cursor immediately
-        self.remote_cursor_pos = (x,y)
-        self.update()
-        # Send move event
         self.mouse_event_signal.emit({'type': 'move', 'x': x, 'y': y})
+        # Update local representation of remote cursor immediately for responsiveness
+        self.update_remote_cursor(x, y)
         event.accept()
 
-    def mousePressEvent(self, event):
-        if self._view_only:
-            return
+    def mousePressEvent(self, event: QMouseEvent):
+        if self._view_only: return
         x, y = self.get_scaled_coords(event.pos())
-        button = 'left' if event.button() == Qt.LeftButton else \
-                 'right' if event.button() == Qt.RightButton else \
-                 'middle' if event.button() == Qt.MiddleButton else None
+        button_map = {Qt.LeftButton: 'left', Qt.RightButton: 'right', Qt.MiddleButton: 'middle'}
+        button = button_map.get(event.button())
         if button:
             self.mouse_event_signal.emit({'type': 'press', 'x': x, 'y': y, 'button': button})
         event.accept()
 
-    def mouseReleaseEvent(self, event):
-        if self._view_only:
-            return
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if self._view_only: return
         x, y = self.get_scaled_coords(event.pos())
-        button = 'left' if event.button() == Qt.LeftButton else \
-                 'right' if event.button() == Qt.RightButton else \
-                 'middle' if event.button() == Qt.MiddleButton else None
+        button_map = {Qt.LeftButton: 'left', Qt.RightButton: 'right', Qt.MiddleButton: 'middle'}
+        button = button_map.get(event.button())
         if button:
             self.mouse_event_signal.emit({'type': 'release', 'x': x, 'y': y, 'button': button})
         event.accept()
 
-    # Note: Qt doesn't directly map to pyautogui click, we send press/release
-    # def mouseDoubleClickEvent(self, event):
-    #     # PyAutoGUI handles double click with click(clicks=2)
-    #     # We might need to detect double clicks manually based on timing
-    #     # or just rely on the host interpreting two rapid clicks.
-    #     pass
-
-    def wheelEvent(self, event):
-        if self._view_only:
-            return
+    def wheelEvent(self, event: QWheelEvent):
+        if self._view_only: return
+        # Use position() for wheel events as pos() might not be accurate for pixelDelta
         x, y = self.get_scaled_coords(event.position().toPoint())
-        delta = event.angleDelta()
-        # Send scroll event (vertical is usually delta.y())
+        # Prefer pixelDelta for smoother scrolling if available, else use angleDelta
+        delta = event.pixelDelta() if event.pixelDelta().y() != 0 else event.angleDelta()
         self.mouse_event_signal.emit({
             'type': 'scroll',
-            'x': x,
-            'y': y,
-            'delta_x': delta.x(),
-            'delta_y': delta.y()
+            'x': x, 'y': y,
+            'delta_x': delta.x(), 'delta_y': delta.y()
         })
         event.accept()
 
-
-    def keyPressEvent(self, event):
-        if self._view_only:
-            return
-        key = self.get_key_string(event)
-        if key:
-            self.key_event_signal.emit({'type': 'press', 'key': key})
+    def keyPressEvent(self, event: QKeyEvent):
+        if self._view_only: return
+        key_str = self.get_key_string(event)
+        if key_str:
+            # print(f"[KeyPress] QtKey: {event.key()}, Text: '{event.text()}', Modifiers: {event.modifiers()}, Mapped: '{key_str}'") # Debug
+            self.key_event_signal.emit({'type': 'press', 'key': key_str})
         event.accept()
 
-    def keyReleaseEvent(self, event):
-        if self._view_only:
-            return
-        # Ignore auto-repeat release events
-        if event.isAutoRepeat():
+    def keyReleaseEvent(self, event: QKeyEvent):
+        if self._view_only: return
+        if event.isAutoRepeat(): # Ignore auto-repeat releases
             event.ignore()
             return
-        key = self.get_key_string(event)
-        if key:
-            self.key_event_signal.emit({'type': 'release', 'key': key})
+        key_str = self.get_key_string(event)
+        if key_str:
+            # print(f"[KeyRelease] QtKey: {event.key()}, Text: '{event.text()}', Modifiers: {event.modifiers()}, Mapped: '{key_str}'") # Debug
+            self.key_event_signal.emit({'type': 'release', 'key': key_str})
         event.accept()
 
-    def get_key_string(self, event):
-        """ Converts Qt key event to a string representation for pyautogui."""
+    def get_key_string(self, event: QKeyEvent) -> str | None:
+        """ Converts Qt key event to a string representation potentially usable by pyautogui or backend."""
         key = event.key()
         text = event.text()
+        modifiers = event.modifiers()
 
-        # Handle modifiers first
-        if key == Qt.Key_Control:
-            return '<ctrl>'
-        if key == Qt.Key_Shift:
-            return '<shift>'
-        if key == Qt.Key_Alt:
-            return '<alt>'
-        if key == Qt.Key_Meta: # Command key on Mac, Windows key on Win
-            return '<cmd>' # Or map to 'win' if needed
-
-        # Handle special keys (non-printable)
-        special_keys = {
-            Qt.Key_Return: '<enter>',
-            Qt.Key_Enter: '<enter>', # Numpad Enter
-            Qt.Key_Escape: '<esc>',
-            Qt.Key_Tab: '<tab>',
-            Qt.Key_Backspace: '<backspace>',
-            Qt.Key_Delete: '<delete>',
-            Qt.Key_Up: '<up>',
-            Qt.Key_Down: '<down>',
-            Qt.Key_Left: '<left>',
-            Qt.Key_Right: '<right>',
-            Qt.Key_Home: '<home>',
-            Qt.Key_End: '<end>',
-            Qt.Key_PageUp: '<pageup>',
-            Qt.Key_PageDown: '<pagedown>',
-            Qt.Key_F1: '<f1>', Qt.Key_F2: '<f2>', Qt.Key_F3: '<f3>',
-            Qt.Key_F4: '<f4>', Qt.Key_F5: '<f5>', Qt.Key_F6: '<f6>',
-            Qt.Key_F7: '<f7>', Qt.Key_F8: '<f8>', Qt.Key_F9: '<f9>',
-            Qt.Key_F10: '<f10>', Qt.Key_F11: '<f11>', Qt.Key_F12: '<f12>',
-            # Add more function keys or special keys as needed
+        # --- Use a dictionary for better mapping ---
+        # Based on pyautogui key names where possible
+        qt_to_str_map = {
+            Qt.Key_Control: 'ctrl', Qt.Key_Shift: 'shift', Qt.Key_Alt: 'alt',
+            Qt.Key_Meta: 'cmd', # Command on Mac, Win on Windows
+            Qt.Key_Return: 'enter', Qt.Key_Enter: 'enter', # Numpad Enter
+            Qt.Key_Escape: 'esc', Qt.Key_Tab: 'tab', Qt.Key_Backspace: 'backspace',
+            Qt.Key_Delete: 'delete', Qt.Key_Insert: 'insert',
+            Qt.Key_Up: 'up', Qt.Key_Down: 'down', Qt.Key_Left: 'left', Qt.Key_Right: 'right',
+            Qt.Key_Home: 'home', Qt.Key_End: 'end',
+            Qt.Key_PageUp: 'pageup', Qt.Key_PageDown: 'pagedown',
+            Qt.Key_F1: 'f1', Qt.Key_F2: 'f2', Qt.Key_F3: 'f3', Qt.Key_F4: 'f4',
+            Qt.Key_F5: 'f5', Qt.Key_F6: 'f6', Qt.Key_F7: 'f7', Qt.Key_F8: 'f8',
+            Qt.Key_F9: 'f9', Qt.Key_F10: 'f10', Qt.Key_F11: 'f11', Qt.Key_F12: 'f12',
+            Qt.Key_F13: 'f13', Qt.Key_F14: 'f14', Qt.Key_F15: 'f15', Qt.Key_F16: 'f16', # Add more F keys
+            Qt.Key_CapsLock: 'capslock', Qt.Key_NumLock: 'numlock', Qt.Key_ScrollLock: 'scrolllock',
+            Qt.Key_Print: 'printscreen', Qt.Key_Pause: 'pause',
+            # Add other special keys if needed...
+            Qt.Key_Space: 'space', # Map space explicitly
         }
-        if key in special_keys:
-            return special_keys[key]
 
-        # Handle printable characters
-        if text and text.isprintable():
-            return text
+        # Check exact key match first (for non-printable/special keys)
+        if key in qt_to_str_map:
+            return qt_to_str_map[key]
 
-        # Fallback for other keys (might need more mapping)
-        print(f"Unhandled key: {key}, text: {text}")
+        # Handle printable characters (use event.text() for correct character with modifiers)
+        # Check if it's NOT a modifier key itself being pressed
+        if text and text.isprintable() and key not in [Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta]:
+             # Consider Shift explicitly for symbols? PyAutoGUI's typewrite usually handles this.
+             # if modifiers & Qt.ShiftModifier and not text.islower() and not text.isupper():
+             #     # It might be a symbol requiring shift, but typewrite should handle it
+             #     pass
+             return text
+
+        # Fallback for keys not explicitly mapped (e.g., multimedia keys)
+        # We could try QKeySequence(key).toString(), but it can be verbose/locale-dependent
+        # print(f"[get_key_string] Unhandled key: QtKey={key}, Text='{text}', Modifiers={modifiers}")
         return None
 
-
-# --- New Main Application Window ---
-class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar etc.
+# --- Main Application Window ---
+class MainWindow(QMainWindow):
     """Main application window shown after login."""
-    request_view_signal = pyqtSignal(str) # Renamed from connect_to_peer_signal
-    disconnect_signal = pyqtSignal()
-    send_chat_message_signal = pyqtSignal(str)
-    logout_signal = pyqtSignal() # Signal for logout request
-    start_sharing_signal = pyqtSignal() # Signal to request start sharing
-    stop_sharing_signal = pyqtSignal()  # Signal to request stop sharing
-    # Add signal for mouse permission
-    mouse_permission_signal = pyqtSignal(bool) # Emits boolean for allow/deny
-    # Add signals for stream settings
-    quality_changed_signal = pyqtSignal(int)
-    scale_changed_signal = pyqtSignal(int) # Emit percentage (25-100)
-    fps_changed_signal = pyqtSignal(int)
-    monitor_changed_signal = pyqtSignal(int) # Emit monitor index (1-based)
-    # Add theme toggle signal
-    toggle_theme_signal = pyqtSignal() # Signal to toggle theme
-    # Add fullscreen toggle signal
-    toggle_fullscreen_signal = pyqtSignal() # Signal to toggle fullscreen mode
+    # --- Signals emitted to AppController ---
+    request_view_signal = pyqtSignal(str) # Emitted when "Connect" button clicked
+    disconnect_signal = pyqtSignal() # Emitted on disconnect button click or close
+    send_chat_message_signal = pyqtSignal(str) # Emitted when chat message sent
+    logout_signal = pyqtSignal() # Emitted on logout button click or window close
+    start_sharing_signal = pyqtSignal() # Emitted on "Start Sharing" click
+    stop_sharing_signal = pyqtSignal() # Emitted on "Stop Sharing" click
+    mouse_permission_signal = pyqtSignal(bool) # Emitted when permission checkbox toggled
+    quality_changed_signal = pyqtSignal(int) # Emitted from quality slider
+    scale_changed_signal = pyqtSignal(int) # Emitted from scale slider
+    fps_changed_signal = pyqtSignal(int) # Emitted from FPS combobox
+    monitor_changed_signal = pyqtSignal(int) # Emitted from monitor combobox (1-based index)
+    toggle_theme_signal = pyqtSignal() # Emitted from theme toggle button
+    # toggle_fullscreen_signal = pyqtSignal() # Fullscreen is handled internally now
 
-    # Default stream settings
+    # Default stream settings constants
     DEFAULT_QUALITY = 75
     DEFAULT_SCALE = 100 # Percentage
     DEFAULT_FPS = 15
-    DEFAULT_MONITOR_INDEX = 1 # Default to primary monitor
-    # Preset FPS values for ComboBox
+    DEFAULT_MONITOR_INDEX = 1 # Default to primary monitor (1-based)
     FPS_OPTIONS = [5, 10, 15, 20, 25, 30]
-    
-    # WebSocket connection status constants (Keep for status bar maybe, but indicator is for peer)
-    WS_STATUS_CONNECTED = "ws_connected"
-    WS_STATUS_CONNECTING = "ws_connecting"
-    WS_STATUS_DISCONNECTED = "ws_disconnected"
-    
-    # --- Peer Connection Status Constants (for the indicator) ---
+
+    # Peer Connection Status Constants (for UI state)
     PEER_STATUS_CONNECTED = "peer_connected"
-    PEER_STATUS_CONNECTING = "peer_connecting" # Requesting connection
+    PEER_STATUS_CONNECTING = "peer_connecting"
     PEER_STATUS_DISCONNECTED = "peer_disconnected"
-    # --- End Peer Connection Status Constants ---
-    
-    # User role constants
+
+    # User role constants (for UI state)
     ROLE_IDLE = "idle"
     ROLE_SHARING = "sharing"
     ROLE_VIEWING = "viewing"
 
-    def __init__(self, username="Unknown User", current_theme="dark"): # Pass username and theme
+    def __init__(self, username="Unknown User", current_theme="dark"):
         super().__init__()
         self.username = username
-        self.current_theme = current_theme  # Store current theme
-        # Store internal state for settings
-        self._current_quality = self.DEFAULT_QUALITY
-        self._current_scale = self.DEFAULT_SCALE
-        self._current_fps = self.DEFAULT_FPS
-        self._current_monitor_index = self.DEFAULT_MONITOR_INDEX
-        # Store the last base status message for FPS updates
-        self._last_base_status = "Ready"
-        self._last_displayed_fps = 0.0
-        
-        # New attributes for toolbar features
-        self._peer_connection_status = self.PEER_STATUS_DISCONNECTED # Renamed state variable
-        self._current_role = self.ROLE_IDLE
+        self.current_theme = current_theme
+        print(f"[UI MainWindow {self.username}] Initializing...")
+
+        # Internal state tracking
         self._connected_peer_username = ""
+        self._peer_connection_status = self.PEER_STATUS_DISCONNECTED
+        self._current_role = self.ROLE_IDLE
         self._is_fullscreen = False
-        
-        # Session timer
+        self._sidebar_expanded = True # Sidebar starts expanded
+
+        # Session timer state
         self._session_start_time = None
         self._session_timer = QTimer(self)
-        self._session_timer.setInterval(1000)  # Update every second
+        self._session_timer.setInterval(1000) # Update every second
         self._session_timer.timeout.connect(self._update_session_time)
-        self._session_duration = 0  # Duration in seconds
+        self._session_duration = 0
 
-        print("[DEBUG] Creating MainWindow with enhanced toolbar")
-        
-        # Setup UI
         self.setWindowTitle(f"SCU Remote Desktop - {self.username}")
-        self.resize(1200, 768) # Increase default width further
-        self.setMinimumWidth(1000) # Increase minimum width
-        
-        # Create enhanced toolbar with sections
+        self.resize(1200, 768)
+        self.setMinimumWidth(1000)
+
+        # Create UI elements
         self._create_toolbar()
-        
-        # --- Create Enhanced Status Bar ---
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        
-        # Create labels for permanent widgets (right side)
-        self.control_status_label = QLabel("Control: N/A")
-        self.control_status_label.setObjectName("controlStatusLabel")
-        self.control_status_label.setToolTip("Indicates if you control the remote peer, or if they control you")
-        
-        self.mode_status_label = QLabel("Mode: Idle")
-        self.mode_status_label.setObjectName("modeStatusLabel")
-        self.mode_status_label.setToolTip("Current interaction mode (Idle, Sharing, Viewing)")
-        
-        self.quality_status_label = QLabel(f"Quality: {self.DEFAULT_QUALITY}%")
-        self.quality_status_label.setObjectName("qualityStatusLabel")
-        self.quality_status_label.setToolTip("Current stream quality setting (when sharing)")
+        self._create_status_bar()
+        self._setup_main_layout() # Merged UI setup logic
 
-        self.fps_status_label = QLabel("FPS: 0.0") # Renamed from fps_status_bar_label
-        self.fps_status_label.setObjectName("fpsStatusLabel")
-        self.fps_status_label.setToolTip("Received frames per second (when viewing)")
+        # Connect internal signals/slots
+        self.quality_changed_signal.connect(self.update_quality_display)
 
-        # Add labels as permanent widgets (added right-to-left)
-        self.statusBar.addPermanentWidget(self.control_status_label)
-        self.statusBar.addPermanentWidget(self._create_status_bar_separator()) # Add separator
-        self.statusBar.addPermanentWidget(self.mode_status_label)
-        self.statusBar.addPermanentWidget(self._create_status_bar_separator()) # Add separator
-        self.statusBar.addPermanentWidget(self.quality_status_label)
-        self.statusBar.addPermanentWidget(self._create_status_bar_separator()) # Add separator
-        self.statusBar.addPermanentWidget(self.fps_status_label)
-        
-        # Set initial message for the temporary message area (left side)
-        self.statusBar.showMessage("Initializing...", 3000) 
-        # --- End Enhanced Status Bar ---
-        
-        # Setup main UI components
-        self.initUI()
-        self.set_disconnected_state() # Initial state
-        
-        # Connect quality signal to update status bar
-        self.quality_changed_signal.connect(self.update_quality_display) 
+        # Set initial disconnected state for UI elements
+        self.set_disconnected_state()
+        print(f"[UI MainWindow {self.username}] Initialization complete.")
 
     def _create_toolbar(self):
-        """Creates the enhanced toolbar with status indicators and controls."""
+        """Creates the main toolbar."""
+        print("[UI MainWindow] Creating Toolbar...")
         toolbar = self.addToolBar("Main Toolbar")
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
-        toolbar.setObjectName("main_toolbar") 
-        toolbar.setContentsMargins(5, 2, 5, 2) 
-        toolbar.layout().setSpacing(8) # Increase spacing slightly without separators
-        
-        # LEFT SECTION: Connection Status and Role
+        toolbar.setObjectName("main_toolbar")
+        toolbar.setContentsMargins(5, 2, 5, 2)
+        toolbar.layout().setSpacing(8) # Spacing between items
+
+        # --- Left Section: Status ---
         self.peer_indicator_label = QLabel()
-        self.peer_indicator_label.setObjectName("peer_status_indicator") 
+        self.peer_indicator_label.setObjectName("peer_status_indicator")
         self.peer_indicator_label.setFixedSize(14, 14)
         self.peer_indicator_label.setToolTip("Peer Connection Status")
         toolbar.addWidget(self.peer_indicator_label)
-        
-        self.peer_status_text_label = QLabel("Disconnected") 
-        self.peer_status_text_label.setObjectName("peer_status_text_label") 
+
+        self.peer_status_text_label = QLabel("Disconnected")
+        self.peer_status_text_label.setObjectName("peer_status_text_label")
         toolbar.addWidget(self.peer_status_text_label)
-        
+
         self.peer_status_label = QLabel("Peer: None")
-        self.peer_status_label.setObjectName("peer_username_label") 
+        self.peer_status_label.setObjectName("peer_username_label")
         toolbar.addWidget(self.peer_status_label)
-        
+
         self.role_label = QLabel("Role: Idle")
-        self.role_label.setObjectName("role_label") 
+        self.role_label.setObjectName("role_label")
         toolbar.addWidget(self.role_label)
-        
+
         self.session_timer_label = QLabel("Session: 00:00:00")
-        self.session_timer_label.setObjectName("session_timer_label") 
+        self.session_timer_label.setObjectName("session_timer_label")
         self.session_timer_label.setToolTip("Current session duration")
         toolbar.addWidget(self.session_timer_label)
-        
-        # CENTER SECTION: Quick Actions 
+
+        toolbar.addSeparator() # Separator
+
+        # --- Center Section: Quick Actions ---
         self.quick_share_button = QPushButton("Share Screen")
-        self.quick_share_button.setObjectName("quick_share_button") 
+        self.quick_share_button.setObjectName("quick_share_button")
         self.quick_share_button.setToolTip("Start sharing your screen")
-        self.quick_share_button.clicked.connect(self.on_start_sharing_clicked)
+        self.quick_share_button.clicked.connect(self.start_sharing_signal.emit) # Emit signal
         toolbar.addWidget(self.quick_share_button)
-        
+
         self.quick_stop_button = QPushButton("Stop Sharing")
-        self.quick_stop_button.setObjectName("quick_stop_button") 
+        self.quick_stop_button.setObjectName("quick_stop_button")
         self.quick_stop_button.setToolTip("Stop sharing your screen")
-        self.quick_stop_button.clicked.connect(self.on_stop_sharing_clicked)
-        self.quick_stop_button.setEnabled(False)
+        self.quick_stop_button.clicked.connect(self.stop_sharing_signal.emit) # Emit signal
         toolbar.addWidget(self.quick_stop_button)
-        
+
         self.quick_disconnect_button = QPushButton("Disconnect Peer")
-        self.quick_disconnect_button.setObjectName("quick_disconnect_button") 
-        self.quick_disconnect_button.setToolTip("Disconnect from peer")
-        self.quick_disconnect_button.clicked.connect(self.disconnect_signal.emit)
-        self.quick_disconnect_button.setEnabled(False)
+        self.quick_disconnect_button.setObjectName("quick_disconnect_button")
+        self.quick_disconnect_button.setToolTip("Disconnect from current peer")
+        self.quick_disconnect_button.clicked.connect(self.disconnect_signal.emit) # Emit signal
         toolbar.addWidget(self.quick_disconnect_button)
-        
-        # RIGHT SECTION: Icons
-        # Add Log Button
+
+        toolbar.addSeparator() # Separator
+
+        # --- Right Section: Icon Buttons ---
+        # Use a spacer to push icons to the right
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(spacer)
+
+        # Log Button (Placeholder)
         self.log_button = QPushButton("📄") # Document emoji
         self.log_button.setObjectName("log_button")
         self.log_button.setToolTip("Show Logs (Not Implemented)")
         self.log_button.setFlat(True)
         self.log_button.setCursor(Qt.PointingHandCursor)
         self.log_button.setMinimumSize(35, 35)
-        # self.log_button.clicked.connect(self.on_show_logs_clicked) # Connect later
+        self.log_button.clicked.connect(self._show_not_implemented_message) # Connect placeholder
         toolbar.addWidget(self.log_button)
-        
-        # Screenshot Button
+
+        # Screenshot Button (Placeholder)
         self.screenshot_button = QPushButton()
         self.screenshot_button.setObjectName("screenshot_button")
         self.screenshot_button.setToolTip("Take Screenshot (Not Implemented)")
-        self.screenshot_button.setIcon(QIcon("screenshot.png"))
+        self.screenshot_button.setIcon(QIcon("Icons/screenshot.png")) # TODO: Ensure icon exists
         self.screenshot_button.setIconSize(QSize(24, 24))
         self.screenshot_button.setFlat(True)
         self.screenshot_button.setCursor(Qt.PointingHandCursor)
         self.screenshot_button.setMinimumSize(35, 35)
-        # self.screenshot_button.clicked.connect(self.on_screenshot_clicked) # Connect later
+        self.screenshot_button.clicked.connect(self._show_not_implemented_message) # Connect placeholder
         toolbar.addWidget(self.screenshot_button)
-        
-        # Screen Recorder Button
+
+        # Screen Recorder Button (Placeholder)
         self.recorder_button = QPushButton()
         self.recorder_button.setObjectName("recorder_button")
         self.recorder_button.setToolTip("Toggle Recording (Not Implemented)")
-        self.recorder_button.setIcon(QIcon("screen recorder.png")) # Use correct filename
+        self.recorder_button.setIcon(QIcon("Icons/screen recorder.png")) # TODO: Ensure icon exists
         self.recorder_button.setIconSize(QSize(24, 24))
         self.recorder_button.setFlat(True)
         self.recorder_button.setCursor(Qt.PointingHandCursor)
         self.recorder_button.setMinimumSize(35, 35)
-        # self.recorder_button.clicked.connect(self.on_recorder_toggled) # Connect later
+        self.recorder_button.clicked.connect(self._show_not_implemented_message) # Connect placeholder
         toolbar.addWidget(self.recorder_button)
-        
+
         # Fullscreen Toggle Button
         self.fullscreen_button = QPushButton()
-        self.fullscreen_button.setObjectName("fullscreen_button") 
+        self.fullscreen_button.setObjectName("fullscreen_button")
         self.fullscreen_button.setToolTip("Toggle Fullscreen Mode")
         self.fullscreen_button.setFlat(True)
         self.fullscreen_button.setCursor(Qt.PointingHandCursor)
         self.fullscreen_button.setMinimumSize(35, 35)
-        self.fullscreen_button.setText("⛶") # Set icon text directly
-        
+        self.fullscreen_button.setText("⛶") # Unicode expand symbol
         self.fullscreen_button.clicked.connect(self._toggle_fullscreen)
         toolbar.addWidget(self.fullscreen_button)
-        
+
         # Theme Toggle Button
         self.theme_button = QPushButton()
-        self.theme_button.setObjectName("theme_button") 
+        self.theme_button.setObjectName("theme_button")
         self.theme_button.setToolTip("Toggle Light/Dark Mode")
         self.theme_button.setFlat(True)
         self.theme_button.setCursor(Qt.PointingHandCursor)
         self.theme_button.setMinimumSize(35, 35)
-        
-        font = self.theme_button.font()
-        font.setPointSize(14)
-        self.theme_button.setFont(font)
-        
-        # Initialize with the current theme icon
-        self._update_theme_icon(self.current_theme)
-        self.theme_button.clicked.connect(self.toggle_theme_signal.emit)
+        font_theme = self.theme_button.font()
+        font_theme.setPointSize(14)
+        self.theme_button.setFont(font_theme)
+        self._update_theme_icon(self.current_theme) # Initialize
+        self.theme_button.clicked.connect(self.toggle_theme_signal.emit) # Emit signal
         toolbar.addWidget(self.theme_button)
-        
+
         # Logout Button
         self.toolbar_logout_button = QPushButton()
-        self.toolbar_logout_button.setObjectName("toolbar_logout_button") 
+        self.toolbar_logout_button.setObjectName("toolbar_logout_button")
         self.toolbar_logout_button.setToolTip("Logout")
         self.toolbar_logout_button.setFlat(True)
         self.toolbar_logout_button.setCursor(Qt.PointingHandCursor)
         self.toolbar_logout_button.setMinimumSize(35, 35)
-        
-        # Set icon from logout.png
-        self.toolbar_logout_button.setIcon(QIcon("logout.png"))
+        self.toolbar_logout_button.setIcon(QIcon("Icons/logout.png")) # TODO: Ensure icon exists
         self.toolbar_logout_button.setIconSize(QSize(24, 24))
-        self.toolbar_logout_button.clicked.connect(self.logout_signal.emit)
+        self.toolbar_logout_button.clicked.connect(self.logout_signal.emit) # Emit signal
         toolbar.addWidget(self.toolbar_logout_button)
-        
-        # Initial UI update for status elements
-        self._update_peer_connection_status_ui() 
-        self._update_role_ui()
 
-    def initUI(self):
-        # Main central widget and layout
+        # Initial UI update for status elements
+        self._update_peer_connection_status_ui()
+        self._update_role_ui()
+        self._update_peer_status_ui()
+
+    def _create_status_bar(self):
+        """Creates the status bar with permanent widgets."""
+        print("[UI MainWindow] Creating Status Bar...")
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
+
+        # Create labels for permanent widgets (right side)
+        self.control_status_label = QLabel("Control: N/A")
+        self.control_status_label.setObjectName("controlStatusLabel")
+        self.control_status_label.setToolTip("Indicates control status (Self: Viewing, Peer: Sharing)")
+
+        self.mode_status_label = QLabel("Mode: Idle")
+        self.mode_status_label.setObjectName("modeStatusLabel")
+        self.mode_status_label.setToolTip("Current interaction mode")
+
+        self.quality_status_label = QLabel(f"Quality: {self.DEFAULT_QUALITY}%")
+        self.quality_status_label.setObjectName("qualityStatusLabel")
+        self.quality_status_label.setToolTip("Current stream quality setting (when sharing)")
+
+        self.fps_status_label = QLabel("FPS: 0.0")
+        self.fps_status_label.setObjectName("fpsStatusLabel")
+        self.fps_status_label.setToolTip("Received frames per second (when viewing)")
+
+        # Add labels as permanent widgets (added right-to-left for order)
+        self.statusBar.addPermanentWidget(self.control_status_label)
+        self.statusBar.addPermanentWidget(self._create_status_bar_separator())
+        self.statusBar.addPermanentWidget(self.mode_status_label)
+        self.statusBar.addPermanentWidget(self._create_status_bar_separator())
+        self.statusBar.addPermanentWidget(self.quality_status_label)
+        self.statusBar.addPermanentWidget(self._create_status_bar_separator())
+        self.statusBar.addPermanentWidget(self.fps_status_label)
+
+        self.show_status_message("Initializing...", 3000) # Initial message
+
+    def _create_status_bar_separator(self):
+        """Helper to create a styled vertical separator for the status bar."""
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("QFrame { margin-left: 3px; margin-right: 3px; }") # Add spacing
+        return separator
+
+    # MODIFIED: Renamed from the second initUI
+    def _setup_main_layout(self):
+        """Sets up the main central widget layout (screen area and sidebar)."""
+        print("[UI MainWindow] Setting up Main Layout...")
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for a cleaner look
-        main_layout.setSpacing(0)  # Remove spacing between screen and sidebar
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # --- Left Side: Screen Display --- 
+        # --- Left Side: Screen Display ---
         self.screen_container = QWidget()
         screen_layout = QVBoxLayout(self.screen_container)
-        screen_layout.setContentsMargins(10, 10, 10, 10)
+        screen_layout.setContentsMargins(10, 10, 10, 10) # Padding around screen area
 
-        # --- Screen Display Widget --- 
         self.scroll_area = QScrollArea()
         self.scroll_area.setBackgroundRole(QPalette.Dark)
-        self.scroll_area.setWidgetResizable(True)
-        
-        self.screen_display_widget = ScreenDisplayWidget(self)
-        self.screen_display_widget.setObjectName("ScreenDisplayWidget")
-        self.scroll_area.setWidget(self.screen_display_widget)
+        self.scroll_area.setWidgetResizable(False) # Important: False for 1:1, True for Fit
+        self.scroll_area.setAlignment(Qt.AlignCenter) # Center content if smaller than viewport
 
+        self.screen_display_widget = ScreenDisplayWidget(self) # Parent is MainWindow
+        self.scroll_area.setWidget(self.screen_display_widget)
         screen_layout.addWidget(self.scroll_area)
 
-        # --- Fit to Window Checkbox --- 
+        # Fit to Window Checkbox
         self.fit_checkbox = QCheckBox("Fit to Window")
         self.fit_checkbox.stateChanged.connect(self._toggle_fit_to_window)
         screen_layout.addWidget(self.fit_checkbox, alignment=Qt.AlignRight)
 
-        # --- Right Side: Collapsible Sidebar --- 
-        # Create sidebar container with fixed width
+        # --- Right Side: Collapsible Sidebar ---
         sidebar_container = QWidget()
         sidebar_container.setObjectName("sidebar_container")
         sidebar_layout = QHBoxLayout(sidebar_container)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
-        # --- Toggle Button for Sidebar ---
+        # Toggle Button Container
         toggle_container = QWidget()
         toggle_container.setFixedWidth(24)
         toggle_container.setObjectName("sidebar_toggle_container")
         toggle_layout = QVBoxLayout(toggle_container)
         toggle_layout.setContentsMargins(0, 0, 0, 0)
         toggle_layout.addStretch()
-        
-        self.sidebar_toggle_button = QPushButton("❯")
+        self.sidebar_toggle_button = QPushButton("❯") # Right arrow initially (expanded)
         self.sidebar_toggle_button.setObjectName("sidebar_toggle_button")
         self.sidebar_toggle_button.setFixedSize(24, 60)
         self.sidebar_toggle_button.setToolTip("Toggle Sidebar")
         self.sidebar_toggle_button.setCursor(Qt.PointingHandCursor)
         self.sidebar_toggle_button.clicked.connect(self._toggle_sidebar)
-        
         toggle_layout.addWidget(self.sidebar_toggle_button)
         toggle_layout.addStretch()
-        
-        # Create the main sidebar widget
+
+        # Main Sidebar Widget
         self.sidebar = QWidget()
         self.sidebar.setObjectName("sidebar")
-        self.sidebar.setMinimumWidth(350)
-        self.sidebar.setMaximumWidth(350)
-        
-        # Create a layout for the sidebar content
+        self.sidebar.setMinimumWidth(350) # Initial expanded width
+        self.sidebar.setMaximumWidth(350) # Initial expanded width
+
         sidebar_content_layout = QVBoxLayout(self.sidebar)
         sidebar_content_layout.setSpacing(15)
         sidebar_content_layout.setContentsMargins(10, 10, 10, 10)
-        
-        # --- Connection GroupBox --- 
+
+        # --- Connection GroupBox ---
         connection_groupbox = QGroupBox("Connection")
         connection_groupbox.setObjectName("connection_groupbox")
         connection_layout = QVBoxLayout()
-
-        # Peer UID label and input in a horizontal layout
         peer_layout = QHBoxLayout()
         peer_layout.addWidget(QLabel("Peer UID:"))
         self.peer_input = QLineEdit()
         self.peer_input.setPlaceholderText("Enter Peer's Username")
         peer_layout.addWidget(self.peer_input)
         connection_layout.addLayout(peer_layout)
-        
-        # Buttons in a horizontal layout below the UID field
         buttons_layout = QHBoxLayout()
-        
-        # Request View button (green)
-        self.request_view_button = QPushButton("Connect")
-        self.request_view_button.setObjectName("connect_button")  # Changed name for CSS styling
-        self.request_view_button.setStyleSheet("background-color: #4CAF50; color: white;")  # Green color
+        self.request_view_button = QPushButton("Connect") # Renamed button
+        self.request_view_button.setObjectName("connect_button") # For potential specific styling
         self.request_view_button.setToolTip("Request to view peer's screen")
-        self.request_view_button.clicked.connect(self.on_request_view_clicked)
+        self.request_view_button.clicked.connect(self.on_request_view_clicked) # Connects to handler
         buttons_layout.addWidget(self.request_view_button)
-
-        # Disconnect button (red)
         self.disconnect_button = QPushButton("Disconnect")
         self.disconnect_button.setObjectName("disconnect_button")
-        self.disconnect_button.setStyleSheet("background-color: #F44336; color: white;")  # Red color
         self.disconnect_button.setToolTip("Disconnect from current peer")
-        self.disconnect_button.clicked.connect(self.disconnect_signal.emit)
-        self.disconnect_button.setEnabled(False)  # Initially disabled
+        self.disconnect_button.clicked.connect(self.disconnect_signal.emit) # Emit signal
         buttons_layout.addWidget(self.disconnect_button)
-        
         connection_layout.addLayout(buttons_layout)
         connection_groupbox.setLayout(connection_layout)
         sidebar_content_layout.addWidget(connection_groupbox)
 
-        # --- Stream Settings GroupBox --- 
-        # Create this before the Sharer GroupBox to establish proper logical flow
+        # --- Stream Controls Container ---
+        stream_controls_container = QWidget()
+        stream_controls_container.setObjectName("stream_controls_container")
+        stream_controls_layout = QVBoxLayout(stream_controls_container)
+        stream_controls_layout.setSpacing(15)
+        stream_controls_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Sharer Control GroupBox
+        self.sharer_groupbox = QGroupBox("Share Screen Controls")
+        self.sharer_groupbox.setObjectName("sharer_groupbox")
+        sharer_layout = QVBoxLayout()
+        self.sharer_groupbox.setLayout(sharer_layout)
+        # MODIFIED: State managed by set_connected/disconnected
+        # self.sharer_groupbox.setEnabled(False) # Initially disabled
+
+        sharing_buttons_layout = QHBoxLayout()
+        self.start_sharing_button = QPushButton("Start Sharing")
+        self.start_sharing_button.setObjectName("start_sharing_button")
+        self.start_sharing_button.clicked.connect(self.start_sharing_signal.emit) # Emit signal
+        sharing_buttons_layout.addWidget(self.start_sharing_button)
+        self.stop_sharing_button = QPushButton("Stop Sharing")
+        self.stop_sharing_button.setObjectName("stop_sharing_button")
+        self.stop_sharing_button.clicked.connect(self.stop_sharing_signal.emit) # Emit signal
+        sharing_buttons_layout.addWidget(self.stop_sharing_button)
+        sharer_layout.addLayout(sharing_buttons_layout)
+        stream_controls_layout.addWidget(self.sharer_groupbox)
+
+        # Stream Settings GroupBox
         self.settings_groupbox = QGroupBox("Stream Settings")
         self.settings_groupbox.setObjectName("settings_groupbox")
-        self.settings_groupbox.setVisible(False)  # Start hidden
-        self.settings_groupbox.setEnabled(False)  # Start disabled
+        # MODIFIED: State managed by set_connected/disconnected
+        # self.settings_groupbox.setVisible(False) # Initially hidden
+        # self.settings_groupbox.setEnabled(False) # Initially disabled
         settings_layout = QFormLayout(self.settings_groupbox)
-        settings_layout.setRowWrapPolicy(QFormLayout.DontWrapRows)
-        settings_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        settings_layout.setLabelAlignment(Qt.AlignLeft)
-        settings_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-
+        # ... (Monitor, Quality, Scale, FPS, Reset - layout unchanged) ...
         # Monitor Selection
         monitor_layout = QHBoxLayout()
         self.monitor_combobox = QComboBox()
         self.monitor_combobox.setObjectName("monitor_combobox")
         self.monitor_combobox.setToolTip("Select which monitor to share")
-        self._populate_monitor_combobox()  # Populate with available monitors
+        self._populate_monitor_combobox() # Populate with available monitors
         self.monitor_combobox.currentIndexChanged.connect(self._emit_monitor_index)
         monitor_layout.addWidget(self.monitor_combobox, 1)
         settings_layout.addRow("Monitor:", monitor_layout)
-
-        # Quality Slider with improved layout
+        # Quality Slider
         quality_layout = QHBoxLayout()
         self.quality_slider = QSlider(Qt.Horizontal)
         self.quality_slider.setObjectName("quality_slider")
@@ -1036,11 +876,10 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.quality_label.setMinimumWidth(40)
         self.quality_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.quality_slider.valueChanged.connect(self._update_quality_label_and_emit)
-        quality_layout.addWidget(self.quality_slider, 1)  # Give slider stretch factor
+        quality_layout.addWidget(self.quality_slider, 1)
         quality_layout.addWidget(self.quality_label)
         settings_layout.addRow("Quality:", quality_layout)
-
-        # Scale Slider with improved layout
+        # Scale Slider
         scale_layout = QHBoxLayout()
         self.scale_slider = QSlider(Qt.Horizontal)
         self.scale_slider.setObjectName("scale_slider")
@@ -1054,26 +893,23 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.scale_label.setMinimumWidth(40)
         self.scale_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.scale_slider.valueChanged.connect(self._update_scale_label_and_emit)
-        scale_layout.addWidget(self.scale_slider, 1)  # Give slider stretch factor
+        scale_layout.addWidget(self.scale_slider, 1)
         scale_layout.addWidget(self.scale_label)
         settings_layout.addRow("Scale:", scale_layout)
-
-        # FPS ComboBox with improved layout
+        # FPS ComboBox
         fps_layout = QHBoxLayout()
         self.fps_combobox = QComboBox()
         self.fps_combobox.setObjectName("fps_combobox")
         self.fps_combobox.setToolTip("Higher FPS = smoother video, more bandwidth")
         for fps_option in self.FPS_OPTIONS:
             self.fps_combobox.addItem(str(fps_option), userData=fps_option)
-        # Find and set the default FPS index
         default_fps_index = self.fps_combobox.findData(self.DEFAULT_FPS)
         if default_fps_index != -1:
-             self.fps_combobox.setCurrentIndex(default_fps_index)
+            self.fps_combobox.setCurrentIndex(default_fps_index)
         self.fps_combobox.currentIndexChanged.connect(self._emit_fps_value)
         fps_layout.addWidget(self.fps_combobox, 1)
         settings_layout.addRow("Max FPS:", fps_layout)
-        
-        # Add Reset to Default button
+        # Reset Button
         reset_layout = QHBoxLayout()
         self.reset_settings_button = QPushButton("Reset to Default")
         self.reset_settings_button.setObjectName("reset_settings_button")
@@ -1082,44 +918,22 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         reset_layout.addStretch(1)
         reset_layout.addWidget(self.reset_settings_button)
         settings_layout.addRow("", reset_layout)
+        # Add settings groupbox to container
+        stream_controls_layout.addWidget(self.settings_groupbox)
+        # Add container to sidebar
+        sidebar_content_layout.addWidget(stream_controls_container)
 
-        # Add the settings groupbox to the sidebar layout (BEFORE the sharer groupbox)
-        sidebar_content_layout.addWidget(self.settings_groupbox)
-
-        # --- Sharer Control GroupBox --- 
-        self.sharer_groupbox = QGroupBox("Share Screen Controls")
-        self.sharer_groupbox.setObjectName("sharer_groupbox")
-        sharer_layout = QVBoxLayout()
-        self.sharer_groupbox.setLayout(sharer_layout)
-        self.sharer_groupbox.setEnabled(False)  # Disabled until connected
-
-        # Start/Stop Buttons
-        sharing_buttons_layout = QHBoxLayout()
-        self.start_sharing_button = QPushButton("Start Sharing")
-        self.start_sharing_button.setObjectName("start_sharing_button")
-        self.start_sharing_button.clicked.connect(self.on_start_sharing_clicked)
-        self.start_sharing_button.setEnabled(False)
-        sharing_buttons_layout.addWidget(self.start_sharing_button)
-
-        self.stop_sharing_button = QPushButton("Stop Sharing")
-        self.stop_sharing_button.setObjectName("stop_sharing_button")
-        self.stop_sharing_button.clicked.connect(self.on_stop_sharing_clicked)
-        self.stop_sharing_button.setEnabled(False)
-        sharing_buttons_layout.addWidget(self.stop_sharing_button)
-        sharer_layout.addLayout(sharing_buttons_layout)
-        
-        # Add the sharer groupbox to the sidebar layout
-        sidebar_content_layout.addWidget(self.sharer_groupbox)
-
-        # --- Mouse Control Checkbox --- 
+        # --- Mouse Control Checkbox ---
         self.mouse_permission_checkbox = QCheckBox("Allow Peer Mouse Control")
         self.mouse_permission_checkbox.setObjectName("mouse_permission_checkbox")
+        self.mouse_permission_checkbox.setToolTip("Allow connected peer to control your mouse/keyboard when sharing")
         self.mouse_permission_checkbox.toggled.connect(self._toggle_mouse_permission)
         self.mouse_permission_checkbox.toggled.connect(self.update_control_status_display)
-        self.mouse_permission_checkbox.setEnabled(False)  # Disabled until connected
+        # MODIFIED: State managed by set_sharing_state
+        # self.mouse_permission_checkbox.setEnabled(False) # Initially disabled
         sidebar_content_layout.addWidget(self.mouse_permission_checkbox)
 
-        # --- Chat Area --- 
+        # --- Chat Area ---
         self.chat_groupbox = QGroupBox("Chat")
         self.chat_groupbox.setObjectName("chat_groupbox")
         chat_layout = QVBoxLayout()
@@ -1127,7 +941,6 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.chat_display.setObjectName("chat_display")
         self.chat_display.setReadOnly(True)
         chat_layout.addWidget(self.chat_display)
-        
         chat_input_layout = QHBoxLayout()
         self.chat_input = QLineEdit()
         self.chat_input.setObjectName("chat_input")
@@ -1135,61 +948,355 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.chat_send_button = QPushButton("Send")
         self.chat_send_button.setObjectName("chat_send_button")
         self.chat_send_button.clicked.connect(self.on_chat_send)
-        self.chat_input.returnPressed.connect(self.on_chat_send)  # Send on Enter
+        self.chat_input.returnPressed.connect(self.on_chat_send) # Send on Enter
         chat_input_layout.addWidget(self.chat_input)
         chat_input_layout.addWidget(self.chat_send_button)
         chat_layout.addLayout(chat_input_layout)
-        
         self.chat_groupbox.setLayout(chat_layout)
         sidebar_content_layout.addWidget(self.chat_groupbox)
-        sidebar_content_layout.addStretch()  # Push controls to the top
-        
-        # Add the toggle container and sidebar to the sidebar layout
+        sidebar_content_layout.addStretch() # Push controls to the top
+
+        # Add toggle and sidebar to sidebar container
         sidebar_layout.addWidget(toggle_container)
         sidebar_layout.addWidget(self.sidebar)
-        
-        # Add the screen container and sidebar container to the main layout
-        main_layout.addWidget(self.screen_container, 1)  # Give screen container stretch factor 1
-        main_layout.addWidget(sidebar_container, 0)  # Don't stretch the sidebar container
-        
-        # Create animation for sidebar collapse/expand
+
+        # Add screen container and sidebar container to main layout
+        main_layout.addWidget(self.screen_container, 1) # Give screen stretch factor
+        main_layout.addWidget(sidebar_container, 0) # No stretch for sidebar
+
+        # --- Sidebar Animation Setup ---
         self.sidebar_animation = QPropertyAnimation(self.sidebar, b"minimumWidth")
-        self.sidebar_animation.setDuration(300)  # Animation duration in ms
+        self.sidebar_animation.setDuration(300) # Animation duration in ms
         self.sidebar_animation.setEasingCurve(QEasingCurve.InOutQuad)
-        
-        # Also animate maximum width to ensure proper collapsing
         self.sidebar_animation_max = QPropertyAnimation(self.sidebar, b"maximumWidth")
-        self.sidebar_animation_max.setDuration(300)  # Animation duration in ms
+        self.sidebar_animation_max.setDuration(300)
         self.sidebar_animation_max.setEasingCurve(QEasingCurve.InOutQuad)
-        
-        # Set sidebar state to expanded (default)
-        self._sidebar_expanded = True
+
+    # --- UI Update Methods (Called by AppController or Internally) ---
+
+    def set_connected_state(self, connected_to_uid):
+        """Updates UI elements for the 'connected' state."""
+        print(f"[UI MainWindow] Setting connected state for peer: {connected_to_uid}")
+        self._connected_peer_username = connected_to_uid
+        self.set_peer_connection_status(self.PEER_STATUS_CONNECTED) # Set status state
+        self._update_peer_status_ui() # Update toolbar labels
+
+        # Connection Group Controls
+        self.request_view_button.setEnabled(False)
+        self.disconnect_button.setEnabled(True)
+        self.peer_input.setEnabled(False)
+        self.peer_input.setText(connected_to_uid) # Show connected peer UID
+
+        # Sharing Group Controls (Enable group, manage buttons based on *sharing* state)
+        self.sharer_groupbox.setEnabled(True)
+        # Start/Stop buttons are handled by set_sharing_state/set_viewing_state
+
+        # Stream Settings Group (Always visible and enabled when connected)
+        self.settings_groupbox.setVisible(True)
+        self.settings_groupbox.setEnabled(True)
+
+        # Mouse Permission Checkbox (State depends on sharing status)
+        # Enablement handled by set_sharing_state
+
+        # Chat Group
+        self.chat_groupbox.setEnabled(True)
+
+        # Toolbar Quick Actions
+        self.quick_disconnect_button.setEnabled(True)
+        # Share/Stop buttons handled by set_sharing_state/set_viewing_state
+
+        self._start_session_timer()
+        self.show_status_message(f"Connected to {connected_to_uid}")
+        self.append_chat_message(f"-- Connected to {connected_to_uid} --")
+
+    def set_disconnected_state(self, message="Ready"):
+        """Updates UI elements for the 'disconnected' state."""
+        print(f"[UI MainWindow] Setting disconnected state. Message: {message}")
+        self._connected_peer_username = ""
+        self.set_peer_connection_status(self.PEER_STATUS_DISCONNECTED) # Set status state
+        self._update_peer_status_ui() # Update toolbar labels
+        self.set_role(self.ROLE_IDLE) # Reset role
+
+        # Connection Group Controls
+        self.request_view_button.setEnabled(True)
+        self.disconnect_button.setEnabled(False)
+        self.peer_input.setEnabled(True)
+        self.peer_input.clear() # Clear peer input
+
+        # Sharing Group Controls (Disable group, reset buttons)
+        self.sharer_groupbox.setEnabled(False)
+        self.start_sharing_button.setEnabled(False)
+        self.stop_sharing_button.setEnabled(False)
+
+        # Stream Settings Group (Hide and disable)
+        self.settings_groupbox.setVisible(False)
+        self.settings_groupbox.setEnabled(False)
+
+        # Mouse Permission Checkbox (Disable and uncheck)
+        self.mouse_permission_checkbox.setEnabled(False)
+        self.mouse_permission_checkbox.setChecked(False)
+
+        # Chat Group
+        self.chat_groupbox.setEnabled(False)
+        # self.chat_display.clear() # Optional: Clear chat on disconnect
+
+        # Toolbar Quick Actions
+        self.quick_disconnect_button.setEnabled(False)
+        self.quick_share_button.setEnabled(False)
+        self.quick_stop_button.setEnabled(False)
+
+        # Screen Display
+        self.screen_display_widget.pixmap = QPixmap() # Clear image
+        self.screen_display_widget.set_view_only(True) # Ensure view only
+        self.screen_display_widget.update() # Repaint
+
+        self._stop_session_timer()
+        self._update_session_time() # Reset timer display
+        self.show_status_message(message)
+        self.update_fps_display(0.0) # Reset FPS display
+        if message != "Ready": # Avoid duplicate messages if just resetting
+             self.append_chat_message(f"-- {message} --")
+
+    def set_sharing_state(self, is_sharing):
+        """Updates UI elements based on whether *this client* is sharing."""
+        print(f"[UI MainWindow] Setting sharing state: {is_sharing}")
+        self.set_role(self.ROLE_SHARING if is_sharing else self.ROLE_IDLE)
+
+        # Update buttons in Sharer GroupBox
+        self.start_sharing_button.setEnabled(not is_sharing)
+        self.stop_sharing_button.setEnabled(is_sharing)
+
+        # Update Toolbar Quick Actions
+        # Can only share/stop if connected
+        peer_connected = bool(self._connected_peer_username)
+        self.quick_share_button.setEnabled(not is_sharing and peer_connected)
+        self.quick_stop_button.setEnabled(is_sharing and peer_connected)
+
+        # Enable/Disable Mouse Permission Checkbox
+        self.mouse_permission_checkbox.setEnabled(is_sharing)
+        if not is_sharing: # Uncheck if stopped sharing
+            self.mouse_permission_checkbox.setChecked(False)
+
+        # Update Control Status display
+        self.update_control_status_display()
+
+        # Update main status message
+        status_msg = "Sharing screen" if is_sharing else "Screen sharing stopped"
+        if self._connected_peer_username:
+             status_msg += f" with {self._connected_peer_username}"
+        self.show_status_message(status_msg)
+
+    def set_viewing_state(self, is_viewing):
+        """Updates UI elements based on whether *this client* is viewing."""
+        print(f"[UI MainWindow] Setting viewing state: {is_viewing}")
+        self.set_role(self.ROLE_VIEWING if is_viewing else self.ROLE_IDLE)
+
+        # When viewing, we cannot share
+        self.quick_share_button.setEnabled(False)
+        self.quick_stop_button.setEnabled(False)
+        self.sharer_groupbox.setEnabled(False) # Disable sharing controls group
+
+        # Ensure settings are visible (if connected) but maybe disable them?
+        # Let's keep settings enabled for now, might be useful for reference.
+        if self._connected_peer_username:
+            self.settings_groupbox.setVisible(True)
+            self.settings_groupbox.setEnabled(True)
+
+        # Mouse permission checkbox is irrelevant when viewing
+        self.mouse_permission_checkbox.setEnabled(False)
+        self.mouse_permission_checkbox.setChecked(False)
+
+        # Update Control Status display (reflects if WE can control THEM)
+        self.update_control_status_display()
+
+        # Update main status message
+        status_msg = f"Viewing {self._connected_peer_username}'s screen" if is_viewing else "Stopped viewing"
+        self.show_status_message(status_msg)
+
+    def set_peer_connection_status(self, status):
+        """Sets the internal peer connection status state."""
+        if status not in [self.PEER_STATUS_CONNECTED, self.PEER_STATUS_CONNECTING, self.PEER_STATUS_DISCONNECTED]:
+            print(f"[UI MainWindow ERROR] Invalid peer connection status: {status}")
+            return
+        self._peer_connection_status = status
+        self._update_peer_connection_status_ui() # Update visual indicator
+
+    def set_role(self, role):
+        """Sets the internal user role state."""
+        if role not in [self.ROLE_IDLE, self.ROLE_SHARING, self.ROLE_VIEWING]:
+            print(f"[UI MainWindow ERROR] Invalid role: {role}")
+            return
+        self._current_role = role
+        self._update_role_ui() # Update visual indicator
+        self.update_control_status_display() # Control status depends on role
+
+    # --- Methods to update UI elements ---
+
+    def append_chat_message(self, message):
+        """Appends a message to the chat display."""
+        # Simple plain text append for now
+        self.chat_display.appendPlainText(message)
+
+    def show_status_message(self, status, timeout=0):
+        """Shows a temporary message in the status bar's main area."""
+        # print(f"[UI Status] {status}") # Optional logging
+        self.statusBar.showMessage(status, timeout)
+
+    def update_quality_display(self, quality):
+        """Updates the Quality status bar label."""
+        self.quality_status_label.setText(f"Quality: {quality}%")
+
+    # ADDED: Method to update FPS display
+    def update_fps_display(self, fps):
+        """Updates the FPS status bar label."""
+        # Format FPS to one decimal place
+        self.fps_status_label.setText(f"FPS: {fps:.1f}")
+
+    def update_control_status_display(self):
+        """Updates the Control status bar label based on role and permissions."""
+        status_text = "Control: N/A"
+        if self._current_role == self.ROLE_SHARING:
+            # When sharing, status reflects if PEER can control US
+            peer_has_control = self.mouse_permission_checkbox.isChecked()
+            status_text = f"Control: {'Enabled (Peer)' if peer_has_control else 'Disabled (Peer)'}"
+        elif self._current_role == self.ROLE_VIEWING:
+            # When viewing, status reflects if WE can control PEER
+            we_have_control = not self.screen_display_widget._view_only
+            status_text = f"Control: {'Enabled (Self)' if we_have_control else 'View-Only (Self)'}"
+
+        self.control_status_label.setText(status_text)
+
+    # --- Methods to update Toolbar UI ---
+
+    def _update_peer_connection_status_ui(self):
+        """Updates the Peer connection status indicator and text in the toolbar."""
+        status = self._peer_connection_status
+        indicator_style_base = "border-radius: 7px; border: 1px solid grey;" # Base style
+
+        if status == self.PEER_STATUS_CONNECTED:
+            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #4CAF50;") # Green
+            self.peer_status_text_label.setText("Connected")
+        elif status == self.PEER_STATUS_CONNECTING:
+            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #FFC107;") # Yellow
+            self.peer_status_text_label.setText("Connecting...")
+        else: # Disconnected
+            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #F44336;") # Red
+            self.peer_status_text_label.setText("Disconnected")
+
+    def _update_role_ui(self):
+        """Updates the role label in the toolbar."""
+        role_map = {
+            self.ROLE_IDLE: "Idle",
+            self.ROLE_SHARING: "Sharing",
+            self.ROLE_VIEWING: "Viewing"
+        }
+        self.role_label.setText(f"Role: {role_map.get(self._current_role, 'Unknown')}")
+
+    def _update_peer_status_ui(self):
+        """Updates the peer username label in the toolbar."""
+        if self._connected_peer_username:
+            self.peer_status_label.setText(f"Peer: {self._connected_peer_username}")
+        else:
+            self.peer_status_label.setText("Peer: None")
+
+    # --- Session Timer Methods ---
+
+    def _start_session_timer(self):
+        """Starts or restarts the session timer."""
+        print("[UI MainWindow] Starting session timer.")
+        self._session_start_time = time.time()
+        self._session_duration = 0
+        if not self._session_timer.isActive():
+            self._session_timer.start()
+        self._update_session_time() # Update display immediately
+
+    def _stop_session_timer(self):
+        """Stops the session timer."""
+        if self._session_timer.isActive():
+            print("[UI MainWindow] Stopping session timer.")
+            self._session_timer.stop()
+        self._session_start_time = None
+
+    def _update_session_time(self):
+        """Updates the session duration display (HH:MM:SS)."""
+        if self._session_start_time is not None:
+            self._session_duration = int(time.time() - self._session_start_time)
+
+        hours = self._session_duration // 3600
+        minutes = (self._session_duration % 3600) // 60
+        seconds = self._session_duration % 60
+        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        self.session_timer_label.setText(f"Session: {time_str}")
+
+    # --- Event Handlers & Slots for UI Actions ---
+
+    def on_chat_send(self):
+        """Handles click on chat send button or Enter in input."""
+        message = self.chat_input.text().strip()
+        if message:
+            self.send_chat_message_signal.emit(message) # Emit signal to controller
+            self.chat_input.clear()
+
+    def on_request_view_clicked(self):
+        """Handles click on the 'Connect' button."""
+        peer_uid = self.peer_input.text().strip()
+        if peer_uid:
+            # Emit signal to controller to handle the request logic
+            self.request_view_signal.emit(peer_uid)
+            # Controller should update UI state (e.g., set connecting status)
+        else:
+            QMessageBox.warning(self, "Input Required", "Please enter a Peer Username to connect to.")
+
+    def _toggle_fit_to_window(self, state):
+        """Handles the 'Fit to Window' checkbox state change."""
+        fit_enabled = (state == Qt.Checked)
+        self.screen_display_widget.set_fit_to_window(fit_enabled)
+        self.scroll_area.setWidgetResizable(fit_enabled) # Crucial for scroll area behavior
+        if not fit_enabled:
+            self.screen_display_widget.adjustSize() # Ensure widget resizes for scrollbars if needed
+        else:
+             # Ensure widget can shrink when fitting - important!
+            self.screen_display_widget.setMinimumSize(1, 1)
+            self.screen_display_widget.updateGeometry() # Trigger relayout
+
+    def _toggle_mouse_permission(self, state):
+        """Emits signal when mouse permission checkbox is toggled by user."""
+        # Only relevant when sharing, enabled state is managed by set_sharing_state
+        permission_enabled = (state == Qt.Checked)
+        print(f"[UI MainWindow] Mouse permission checkbox toggled by user: {permission_enabled}")
+        self.mouse_permission_signal.emit(permission_enabled) # Emit signal to controller
+
+    def _toggle_fullscreen(self):
+        """Toggles the main window fullscreen mode."""
+        if self.isFullScreen():
+            self.showNormal()
+            self.fullscreen_button.setText("⛶") # Unicode expand symbol
+            self.fullscreen_button.setToolTip("Enter Fullscreen Mode")
+            self._is_fullscreen = False
+        else:
+            self.showFullScreen()
+            self.fullscreen_button.setText("⮧") # Unicode exit fullscreen symbol (alternative)
+            self.fullscreen_button.setToolTip("Exit Fullscreen Mode")
+            self._is_fullscreen = True
 
     def _toggle_sidebar(self):
-        """Toggle the sidebar between expanded and collapsed states."""
-        if self._sidebar_expanded:
-            # Collapse sidebar
-            self.sidebar_animation.setStartValue(self.sidebar.width())
-            self.sidebar_animation.setEndValue(0)
-            self.sidebar_animation_max.setStartValue(self.sidebar.width())
-            self.sidebar_animation_max.setEndValue(0)
-            self.sidebar_animation.start()
-            self.sidebar_animation_max.start()
-            self.sidebar_toggle_button.setText("❮")  # Change to left-pointing arrow
-            self._sidebar_expanded = False
-        else:
-            # Expand sidebar
-            self.sidebar_animation.setStartValue(self.sidebar.width())
-            self.sidebar_animation.setEndValue(350)
-            self.sidebar_animation_max.setStartValue(self.sidebar.width())
-            self.sidebar_animation_max.setEndValue(350)
-            self.sidebar_animation.start()
-            self.sidebar_animation_max.start()
-            self.sidebar_toggle_button.setText("❯")  # Change to right-pointing arrow
-            self._sidebar_expanded = True
+        """Animates the sidebar collapse/expand."""
+        start_width = self.sidebar.width()
+        target_width = 0 if self._sidebar_expanded else 350
 
-    # --- Helper methods for UI --- 
+        self.sidebar_animation.setStartValue(start_width)
+        self.sidebar_animation.setEndValue(target_width)
+        self.sidebar_animation_max.setStartValue(start_width)
+        self.sidebar_animation_max.setEndValue(target_width)
+
+        self.sidebar_animation.start()
+        self.sidebar_animation_max.start()
+
+        self.sidebar_toggle_button.setText("❮" if self._sidebar_expanded else "❯") # Update arrow
+        self._sidebar_expanded = not self._sidebar_expanded
+
     def _populate_monitor_combobox(self):
+        """Populates the monitor selection combobox."""
         try:
             monitors = screeninfo.get_monitors()
             self.monitor_combobox.clear()
@@ -1198,489 +1305,118 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
                 self.monitor_combobox.setEnabled(False)
                 return
 
+            primary_monitor_index = -1
             for i, monitor in enumerate(monitors):
                 monitor_label = f"Monitor {i+1}: {monitor.width}x{monitor.height}"
                 if monitor.is_primary:
                     monitor_label += " (Primary)"
-                self.monitor_combobox.addItem(monitor_label, userData=i + 1) # Use 1-based index for user data
-                
-            # Set default selection
-            if len(monitors) >= self.DEFAULT_MONITOR_INDEX:
-                 self.monitor_combobox.setCurrentIndex(self.DEFAULT_MONITOR_INDEX - 1) # 0-based index for setCurrentIndex
-            elif len(monitors) > 0:
-                 self.monitor_combobox.setCurrentIndex(0) # Fallback to first monitor
+                    primary_monitor_index = i
+                # Store 1-based index in userData for controller logic
+                self.monitor_combobox.addItem(monitor_label, userData=i + 1)
 
-        except screeninfo.ScreenInfoError as e:
-            print(f"Could not get monitor info: {e}")
+            # Set default selection (Prefer primary, fallback to index or first)
+            default_selection_index = 0 # Fallback to first monitor
+            if self.DEFAULT_MONITOR_INDEX - 1 < len(monitors):
+                 default_selection_index = self.DEFAULT_MONITOR_INDEX - 1
+            if primary_monitor_index != -1 : # Prefer primary if found
+                 default_selection_index = primary_monitor_index
+
+            self.monitor_combobox.setCurrentIndex(default_selection_index)
+            self.monitor_combobox.setEnabled(True)
+
+        except Exception as e: # Catch potential screeninfo errors or others
+            print(f"[UI ERROR] Could not get monitor info: {e}")
+            self.monitor_combobox.clear()
             self.monitor_combobox.addItem("Error getting monitors", userData=-1)
             self.monitor_combobox.setEnabled(False)
 
     def _emit_monitor_index(self, index):
+        """Emits the 1-based index of the selected monitor."""
         monitor_index_data = self.monitor_combobox.itemData(index)
         if monitor_index_data and monitor_index_data != -1:
-             print(f"[UI MainWindow] Monitor selection changed: Index {index}, UserData (1-based): {monitor_index_data}") # LOG
-             self.monitor_changed_signal.emit(monitor_index_data) # Emit 1-based index
+            self.monitor_changed_signal.emit(monitor_index_data) # Emit 1-based index
 
     def _update_quality_label_and_emit(self, value):
+        """Updates quality label and emits signal."""
         self.quality_label.setText(f"{value}%")
         self.quality_changed_signal.emit(value)
 
     def _update_scale_label_and_emit(self, value):
+        """Updates scale label and emits signal."""
         self.scale_label.setText(f"{value}%")
         self.scale_changed_signal.emit(value)
 
     def _emit_fps_value(self, index):
+        """Emits the selected FPS value."""
         fps_data = self.fps_combobox.itemData(index)
         if fps_data:
             self.fps_changed_signal.emit(fps_data)
 
-    # --- Event Handlers --- 
-    def on_sharer_toggled(self, checked):
-        # This method is no longer used since we removed the checkbox
-        # Keeping as a stub in case we need to restore functionality later
-        pass
-
-    def on_request_view_clicked(self): # Renamed from on_connect_clicked
-        peer_uid = self.peer_input.text().strip()
-        if peer_uid:
-            # Set connecting state temporarily
-            self.set_peer_connection_status(self.PEER_STATUS_CONNECTING) # Show yellow connecting status
-            self._update_peer_connection_status_ui()
-            self.request_view_signal.emit(peer_uid) # Emit renamed signal
-            # Disable connect button temporarily while request is in progress
-            self.request_view_button.setEnabled(False)
-            self.show_status_message(f"Connecting to {peer_uid}...")
-        else:
-            QMessageBox.warning(self, "Input Required", "Please enter a Peer Username to connect to.")
-
-    def on_chat_send(self):
-        message = self.chat_input.text().strip()
-        if message:
-            # self.append_chat_message(f"Me: {message}") # Show own message immediately
-            self.send_chat_message_signal.emit(message)
-            self.chat_input.clear()
-
-    # --- Methods called by AppController --- 
-    def append_chat_message(self, message):
-        self.chat_display.appendPlainText(message)
-
-    def show_status_message(self, status, timeout=0):
-        """Shows a temporary message in the status bar's main area.
-        
-        Args:
-            status: The message string to display.
-            timeout: Duration in milliseconds (0 = permanent until replaced).
-        """
-        self.statusBar.showMessage(status, timeout)
-
-    def update_quality_display(self, quality):
-        """Updates the Quality status bar label."""
-        self.quality_status_label.setText(f"Quality: {quality}%")
-        
-    # --- New method to update WebSocket status label --- (Keep for now, might remove later)
-    def update_ws_status(self, status_text):
-        """Updates the (now potentially unused) WebSocket status label in the status bar."""
-        # self.ws_status_bar_label.setText(f"WS: {status_text}")
-        pass # Commented out as we removed the WS label
-
-    # --- State Management Methods (called by AppController) ---
-
-    def set_connected_state(self, connected_to_uid):
-        """Updates UI to show connected state.
-        
-        Args:
-            connected_to_uid: UID of the connected peer
-        """
-        print(f"Setting connected state to peer: {connected_to_uid}")
-        # Update connection controls
-        self.disconnect_button.setEnabled(True)  # Enable disconnect button
-        self.request_view_button.setEnabled(False)  # Disable connect button
-        self.peer_input.setEnabled(False)  # Disable UID input field
-        self.sharer_groupbox.setEnabled(True)  # Enable sharing controls
-        
-        # Always show and enable Stream Settings when connected
-        self.settings_groupbox.setVisible(True)
-        self.settings_groupbox.setEnabled(True)  # Enable settings immediately when connected
-        
-        # New toolbar updates
-        self.set_peer_connection_status(self.PEER_STATUS_CONNECTED)
-        self._connected_peer_username = connected_to_uid
-        self._update_peer_status_ui()
-        self.quick_disconnect_button.setEnabled(True)
-        self.quick_share_button.setEnabled(True)
-        
-        # Start session timer
-        self._start_session_timer()
-        
-        # Update status
-        status_msg = f"Connected to {connected_to_uid}"
-        self.show_status_message(status_msg)
-        
-        # Reset FPS display if it was showing
-        if self._last_displayed_fps > 0:
-            self.update_fps_display(0)
-        
-        # Add connection message to chat
-        self.append_chat_message(f"Connected to {connected_to_uid}")
-        
-        # Start with default stream settings visible and enabled
-        self.start_sharing_button.setEnabled(True)
-
-    def set_disconnected_state(self, message="Ready"):
-        """Updates UI to show disconnected state.
-        
-        Args:
-            message: Optional status message to display
-        """
-        print(f"Setting disconnected state with message: {message}")
-        # Update connection controls
-        self.disconnect_button.setEnabled(False)  # Disable disconnect button
-        self.request_view_button.setEnabled(True)  # Enable connect button
-        self.peer_input.setEnabled(True)  # Enable UID input field
-        
-        # Disable sharing controls
-        self.sharer_groupbox.setEnabled(False)
-        # No longer checkable: self.sharer_groupbox.setChecked(False)
-        self.settings_groupbox.setVisible(False)
-        self.settings_groupbox.setEnabled(False)
-        
-        # Turn off mouse permission checkbox if it was on
-        self.mouse_permission_checkbox.setChecked(False)
-        self.screen_display_widget.set_view_only(True)
-        
-        # Reset screen display (remove any image)
-        self.screen_display_widget.pixmap = QPixmap() # Clear the pixmap
-        self.screen_display_widget.update() # Trigger repaint to show blank state
-        
-        # New toolbar updates
-        self.set_peer_connection_status(self.PEER_STATUS_DISCONNECTED) # Update peer status
-        self._connected_peer_username = ""
-        self._update_peer_status_ui()
-        self.quick_disconnect_button.setEnabled(False)
-        self.quick_share_button.setEnabled(False)
-        self.quick_stop_button.setEnabled(False)
-        
-        # Set role to idle
-        self.set_role(self.ROLE_IDLE)
-        
-        # Stop session timer
-        self._stop_session_timer()
-        self._update_session_time() # Reset display to 00:00:00
-        
-        # Update status
-        self.show_status_message(message)
-        
-        # Reset FPS display if it was showing
-        if self._last_displayed_fps > 0:
-            self.update_fps_display(0)
-
-    def set_sharing_state(self, is_sharing):
-        """Updates UI to reflect screen sharing state.
-        
-        Args:
-            is_sharing: True if screen is being shared, False otherwise
-        """
-        print(f"Setting sharing state to: {is_sharing}")
-        
-        # Update the role
-        self.set_role(self.ROLE_SHARING if is_sharing else self.ROLE_IDLE)
-        
-        # Update buttons
-        # The groupbox is no longer checkable, so we don't need to check/uncheck it
-        # self.sharer_groupbox.setChecked(is_sharing)
-        self.start_sharing_button.setEnabled(not is_sharing)
-        self.stop_sharing_button.setEnabled(is_sharing)
-        
-        # Update toolbar quick action buttons
-        self.quick_share_button.setEnabled(not is_sharing and bool(self._connected_peer_username))
-        self.quick_stop_button.setEnabled(is_sharing)
-        
-        # Always make settings visible when connected
-        if self._connected_peer_username:
-            self.settings_groupbox.setVisible(True)
-            self.settings_groupbox.setEnabled(True)
-        else:
-            self.settings_groupbox.setVisible(False)
-            self.settings_groupbox.setEnabled(False)
-            
-        # Update status message
-        if is_sharing:
-            self.show_status_message(f"Sharing screen to {self._connected_peer_username}")
-        elif self._connected_peer_username:
-            self.show_status_message(f"Connected to {self._connected_peer_username}")
-        else:
-            self.show_status_message("Ready")
-
-    def update_remote_screen(self, image_data):
-        """Updates the screen display with remote screen image and sets viewing state."""
-        # Call original implementation
-        self.screen_display_widget.update_screen(image_data)
-        
-        # Set viewing state to true when receiving a screen image
-        if image_data and self._current_role != self.ROLE_VIEWING:
-            self.set_viewing_state(True)
-
-    def update_remote_cursor(self, x, y):
-        """Pass cursor data to the display widget."""
-        self.screen_display_widget.update_remote_cursor(x, y)
-
-    def set_viewing_state(self, is_viewing):
-        """Updates UI to reflect screen viewing state.
-        
-        Args:
-            is_viewing: True if viewing remote screen, False otherwise
-        """
-        print(f"Setting viewing state to: {is_viewing}")
-        
-        # Update the role
-        self.set_role(self.ROLE_VIEWING if is_viewing else self.ROLE_IDLE)
-        
-        # Update status message
-        if is_viewing:
-            self.show_status_message(f"Viewing {self._connected_peer_username}'s screen")
-        elif self._connected_peer_username:
-            self.show_status_message(f"Connected to {self._connected_peer_username}")
-        else:
-            self.show_status_message("Ready")
-
-    # --- Button Click Handlers ---
-    # These now primarily emit signals. AppController handles the logic & state updates.
-
-    def on_start_sharing_clicked(self):
-        # Emit signal regardless of checkbox state; controller verifies if allowed
-        self.start_sharing_signal.emit()
-        # Controller will call set_sharing_state(True) upon success
-
-
-    def on_stop_sharing_clicked(self):
-        # Emit signal regardless of checkbox state; controller verifies if allowed
-        self.stop_sharing_signal.emit()
-        # Controller will call set_sharing_state(False) upon success
-
-    def closeEvent(self, event):
-        """Handle window close event."""
-        self.logout_signal.emit() # Signal AppController to handle logout/cleanup
-        event.accept() # Close the window
-
-    # --- Slot for Fit Checkbox --- 
-    def _toggle_fit_to_window(self, state):
-        fit_enabled = (state == Qt.Checked)
-        print(f"[UI MainWindow] Fit to window toggled: {fit_enabled}") # LOG
-        self.screen_display_widget.set_fit_to_window(fit_enabled)
-        self.scroll_area.setWidgetResizable(fit_enabled) # Important for scrollarea behavior
-        if not fit_enabled:
-            self.screen_display_widget.adjustSize() # Ensure widget resizes for scrollbars
-            print("[UI MainWindow] Disabled fit, adjusted widget size.") # LOG
-        else:
-             # When fitting, ensure widget fills scroll area
-             self.screen_display_widget.setMinimumSize(1, 1) 
-             self.screen_display_widget.updateGeometry() # Trigger relayout
-
-    def _toggle_mouse_permission(self, state):
-        permission_enabled = (state == Qt.Checked)
-        print(f"[UI MainWindow] Mouse permission toggled: {permission_enabled}") # LOG
-        self.mouse_permission_signal.emit(permission_enabled)
-
-    # --- Method to update theme button icon --- 
-    def _update_theme_icon(self, theme_name):
-        if theme_name == "dark":
-            emoji = "☀️"  # Sun emoji for dark mode (switch to light)
-            tooltip = "Switch to Light Mode"
-        else:
-            emoji = "🌙"  # Moon emoji for dark mode (switch to dark) 
-            tooltip = "Switch to Dark Mode"
-            
-        # Set the text directly to the emoji
-        self.theme_button.setText(emoji)
-        self.theme_button.setIcon(QIcon())  # Clear any icon
-        self.theme_button.setToolTip(tooltip)
-        
-        # The font size is already set in CSS, but we'll ensure it's set here as well
-        # for systems that might override it
-        font = self.theme_button.font()
-        font.setPointSize(14)  # Larger font for emoji
-        self.theme_button.setFont(font)
-
-    def _toggle_fullscreen(self):
-        """Toggle fullscreen mode."""
-        if self.isFullScreen():
-            self.showNormal()
-            self.fullscreen_button.setText("⛶")  # Unicode expand symbol
-            self.fullscreen_button.setToolTip("Enter Fullscreen Mode")
-            self._is_fullscreen = False
-        else:
-            self.showFullScreen()
-            self.fullscreen_button.setText("⛫")  # Unicode exit fullscreen symbol
-            self.fullscreen_button.setToolTip("Exit Fullscreen Mode")
-            self._is_fullscreen = True
-    
-    def _update_peer_connection_status_ui(self): # Renamed method
-        """Updates the Peer connection status indicator in the toolbar."""
-        status = self._peer_connection_status # Use renamed state variable
-        indicator_style_base = "border-radius: 7px;" # Make it circular
-        
-        # Update the indicator color and text
-        if status == self.PEER_STATUS_CONNECTED:
-            # Green circle for connected
-            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #4CAF50;") # Green
-            self.peer_status_text_label.setText("Connected")
-            self.peer_status_text_label.setStyleSheet("") # Remove inline style
-        elif status == self.PEER_STATUS_CONNECTING:
-            # Yellow circle for connecting
-            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #FFC107;") # Yellow
-            self.peer_status_text_label.setText("Connecting...")
-            self.peer_status_text_label.setStyleSheet("") # Remove inline style
-        else:  # Disconnected (PEER_STATUS_DISCONNECTED)
-            # Red circle for disconnected
-            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #F44336;") # Red
-            self.peer_status_text_label.setText("Disconnected")
-            self.peer_status_text_label.setStyleSheet("") # Remove inline style
-    
-    def _update_role_ui(self):
-        """Updates the role indicator in the toolbar."""
-        role = self._current_role
-        
-        if role == self.ROLE_SHARING:
-            self.role_label.setText("Role: Sharing")
-            self.role_label.setStyleSheet("") # Remove inline style
-        elif role == self.ROLE_VIEWING:
-            self.role_label.setText("Role: Viewing")
-            self.role_label.setStyleSheet("") # Remove inline style
-        else:  # ROLE_IDLE
-            self.role_label.setText("Role: Idle")
-            self.role_label.setStyleSheet("")  # Reset style
-    
-    def _update_peer_status_ui(self):
-        """Updates the peer connection status in the toolbar."""
-        if self._connected_peer_username:
-            self.peer_status_label.setText(f"Peer: {self._connected_peer_username}")
-            self.peer_status_label.setStyleSheet("") # Remove inline style
-        else:
-            self.peer_status_label.setText("Peer: None")
-            self.peer_status_label.setStyleSheet("")  # Reset style
-    
-    def _start_session_timer(self):
-        """Starts the session timer."""
-        self._session_start_time = time.time()
-        self._session_duration = 0
-        self._session_timer.start()
-        self._update_session_time()  # Update immediately
-    
-    def _stop_session_timer(self):
-        """Stops the session timer."""
-        if self._session_timer.isActive():
-            self._session_timer.stop()
-        self._session_start_time = None
-    
-    def _update_session_time(self):
-        """Updates the session duration display."""
-        if self._session_start_time is not None:
-            # Calculate elapsed time
-            self._session_duration = int(time.time() - self._session_start_time)
-        
-        # Format time as HH:MM:SS
-        hours = self._session_duration // 3600
-        minutes = (self._session_duration % 3600) // 60
-        seconds = self._session_duration % 60
-        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        
-        self.session_timer_label.setText(f"Session: {time_str}")
-    
-    def set_peer_connection_status(self, status): # Renamed method
-        """Sets the Peer connection status and updates the UI indicator.
-        
-        Args:
-            status: One of PEER_STATUS_CONNECTED, PEER_STATUS_CONNECTING, 
-                  or PEER_STATUS_DISCONNECTED
-        """
-        if status not in [self.PEER_STATUS_CONNECTED, 
-                         self.PEER_STATUS_CONNECTING,
-                         self.PEER_STATUS_DISCONNECTED]:
-            print(f"Invalid peer connection status: {status}")
-            return
-        
-        self._peer_connection_status = status # Use renamed state variable
-        self._update_peer_connection_status_ui() # Call renamed update method
-    
-    def set_role(self, role):
-        """Sets the current user role and updates the UI.
-        
-        Args:
-            role: One of ROLE_IDLE, ROLE_SHARING, or ROLE_VIEWING
-        """
-        if role not in [self.ROLE_IDLE, self.ROLE_SHARING, self.ROLE_VIEWING]:
-            print(f"Invalid role: {role}")
-            return
-        
-        self._current_role = role
-        self._update_role_ui()
-        
-        # Update Mode status bar label
-        if role == self.ROLE_SHARING:
-            self.mode_status_label.setText("Mode: Sharing")
-        elif role == self.ROLE_VIEWING:
-            self.mode_status_label.setText("Mode: Viewing")
-        else: # ROLE_IDLE
-            self.mode_status_label.setText("Mode: Idle")
-            
-        # Update quick action buttons based on role
-        if role == self.ROLE_SHARING:
-            self.quick_share_button.setEnabled(False)
-            self.quick_stop_button.setEnabled(True)
-        elif role == self.ROLE_VIEWING:
-            self.quick_share_button.setEnabled(False)
-            self.quick_stop_button.setEnabled(False)
-        else:  # ROLE_IDLE
-            # Enable/disable based on peer connection
-            peer_connected = bool(self._connected_peer_username)
-            self.quick_share_button.setEnabled(peer_connected)
-            self.quick_stop_button.setEnabled(False)
-
-    def _create_status_bar_separator(self):
-        """Helper to create a styled vertical separator for the status bar."""
-        separator = QFrame()
-        separator.setFrameShape(QFrame.VLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        # separator.setStyleSheet("QFrame { color: #AAA; margin-left: 3px; margin-right: 3px; }") # Optional styling
-        return separator
-
-    # --- New method to update Control status label ---
-    def update_control_status_display(self):
-        """Updates the Control status bar label based on current role and permissions."""
-        status_text = "Control: N/A"
-        if self._current_role == self.ROLE_SHARING:
-            # When sharing, status reflects if PEER can control US
-            peer_has_control = self.mouse_permission_checkbox.isChecked() 
-            status_text = f"Control: {'Enabled' if peer_has_control else 'Disabled'} (Peer)"
-        elif self._current_role == self.ROLE_VIEWING:
-            # When viewing, status reflects if WE can control PEER
-            if hasattr(self, 'screen_display_widget') and self.screen_display_widget:
-                we_have_control = not self.screen_display_widget._view_only 
-                status_text = f"Control: {'Enabled' if we_have_control else 'View-Only'} (Self)"
-            else:
-                status_text = "Control: Unknown (UI Error)" # Fallback if widget doesn't exist
-        
-        self.control_status_label.setText(status_text)
-
-    # --- Helper methods for Stream Settings ---
     def _reset_stream_settings(self):
-        """Reset all stream settings to their default values."""
-        # Reset quality slider
+        """Resets stream settings UI controls to default values."""
+        print("[UI MainWindow] Resetting stream settings UI.")
+        # Reset quality slider (will trigger signal)
         self.quality_slider.setValue(self.DEFAULT_QUALITY)
-        
-        # Reset scale slider
+        # Reset scale slider (will trigger signal)
         self.scale_slider.setValue(self.DEFAULT_SCALE)
-        
-        # Reset FPS combobox
+        # Reset FPS combobox (will trigger signal)
         default_fps_index = self.fps_combobox.findData(self.DEFAULT_FPS)
         if default_fps_index != -1:
             self.fps_combobox.setCurrentIndex(default_fps_index)
-            
-        # Reset monitor selection if possible
-        if len(screeninfo.get_monitors()) >= self.DEFAULT_MONITOR_INDEX:
-            default_monitor_index = self.DEFAULT_MONITOR_INDEX - 1  # Convert to 0-based
-            self.monitor_combobox.setCurrentIndex(default_monitor_index)
-            
-        # Show a brief status message
+        # Reset monitor combobox (will trigger signal)
+        try:
+            monitors = screeninfo.get_monitors()
+            primary_monitor_index = -1
+            default_selection_index = 0
+            if monitors:
+                 for i, m in enumerate(monitors):
+                      if m.is_primary:
+                           primary_monitor_index = i
+                           break
+                 if self.DEFAULT_MONITOR_INDEX - 1 < len(monitors):
+                      default_selection_index = self.DEFAULT_MONITOR_INDEX - 1
+                 if primary_monitor_index != -1:
+                      default_selection_index = primary_monitor_index
+            self.monitor_combobox.setCurrentIndex(default_selection_index)
+        except Exception:
+            pass # Ignore errors resetting monitor combo
+
         self.show_status_message("Stream settings reset to defaults", 3000)
 
+    def _update_theme_icon(self, theme_name):
+        """Updates the theme toggle button icon in the toolbar."""
+        if theme_name == "dark":
+            emoji = "☀️"
+            tooltip = "Switch to Light Mode"
+        else:
+            emoji = "🌙"
+            tooltip = "Switch to Dark Mode"
+        self.theme_button.setText(emoji)
+        self.theme_button.setToolTip(tooltip)
+        font = self.theme_button.font()
+        font.setPointSize(14)
+        self.theme_button.setFont(font)
+
+    def _show_not_implemented_message(self):
+         """Placeholder for unimplemented toolbar actions."""
+         QMessageBox.information(self, "Not Implemented", "This feature is not yet implemented.")
+
+    # --- Override closeEvent ---
+    def closeEvent(self, event):
+        """Ensures logout signal is emitted when window is closed."""
+        print("[UI MainWindow] Close event triggered. Emitting logout signal.")
+        self.logout_signal.emit() # Signal AppController to handle cleanup
+        event.accept() # Allow window to close
+
+# --- Main Execution Guard (Optional for UI file, but good practice) ---
+# if __name__ == '__main__':
+#     app = QApplication(sys.argv)
+#
+#     # Example Usage (for testing UI components standalone)
+#     # login_win = LoginWindow()
+#     # login_win.show()
+#
+#     main_win = MainWindow(username="TestUser")
+#     main_win.show()
+#
+#     sys.exit(app.exec_())

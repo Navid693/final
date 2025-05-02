@@ -1,0 +1,318 @@
+2025-05-02 22:02:47,739 - websockets.server - INFO - server listening on 127.0.0.1:8765
+2025-05-02 22:02:47,740 - websockets.server - INFO - server listening on [::1]:8765
+2025-05-02 22:02:47,743 - SimpleServer - INFO - Starting server on localhost:8765
+2025-05-02 22:02:47,744 - SimpleServer - INFO - Server started on ws://localhost:8765
+2025-05-02 22:02:59,369 - websockets.server - INFO - connection open
+2025-05-02 22:02:59,370 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:01,375 - websockets.server - INFO - connection open
+2025-05-02 22:03:01,375 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:03,382 - websockets.server - INFO - connection open
+2025-05-02 22:03:03,383 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:05,120 - websockets.server - INFO - connection open
+2025-05-02 22:03:05,121 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:05,388 - websockets.server - INFO - connection open
+2025-05-02 22:03:05,389 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:07,126 - websockets.server - INFO - connection open
+2025-05-02 22:03:07,126 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:07,393 - websockets.server - INFO - connection open
+2025-05-02 22:03:07,394 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:09,132 - websockets.server - INFO - connection open
+2025-05-02 22:03:09,132 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:09,398 - websockets.server - INFO - connection open
+2025-05-02 22:03:09,399 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:11,137 - websockets.server - INFO - connection open
+2025-05-02 22:03:11,137 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:11,403 - websockets.server - INFO - connection open
+2025-05-02 22:03:11,404 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:13,142 - websockets.server - INFO - connection open
+2025-05-02 22:03:13,143 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:13,408 - websockets.server - INFO - connection open
+2025-05-02 22:03:13,409 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:15,146 - websockets.server - INFO - connection open
+2025-05-02 22:03:15,147 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:15,412 - websockets.server - INFO - connection open
+2025-05-02 22:03:15,413 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:17,152 - websockets.server - INFO - connection open
+2025-05-02 22:03:17,153 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:17,417 - websockets.server - INFO - connection open
+2025-05-02 22:03:17,418 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:19,157 - websockets.server - INFO - connection open
+2025-05-02 22:03:19,157 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:19,423 - websockets.server - INFO - connection open
+2025-05-02 22:03:19,424 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:21,161 - websockets.server - INFO - connection open
+2025-05-02 22:03:21,162 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:21,428 - websockets.server - INFO - connection open
+2025-05-02 22:03:21,429 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:21,655 - websockets.server - INFO - connection open
+2025-05-02 22:03:21,656 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:22,353 - websockets.server - INFO - connection open
+2025-05-02 22:03:22,354 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:22,552 - websockets.server - INFO - connection open
+2025-05-02 22:03:22,553 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:22,746 - websockets.server - INFO - connection open
+2025-05-02 22:03:22,747 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:23,167 - websockets.server - INFO - connection open
+2025-05-02 22:03:23,167 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:23,434 - websockets.server - INFO - connection open
+2025-05-02 22:03:23,434 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:23,661 - websockets.server - INFO - connection open
+2025-05-02 22:03:23,662 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:24,358 - websockets.server - INFO - connection open
+2025-05-02 22:03:24,358 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:24,558 - websockets.server - INFO - connection open
+2025-05-02 22:03:24,559 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:25,174 - websockets.server - INFO - connection open
+2025-05-02 22:03:25,174 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:36,276 - SimpleServer - INFO - Received signal 2, shutting down...
+2025-05-02 22:03:36,277 - SimpleServer - INFO - Server stopped.
+2025-05-02 22:03:37,981 - websockets.server - INFO - server listening on 127.0.0.1:8765
+2025-05-02 22:03:37,982 - websockets.server - INFO - server listening on [::1]:8765
+2025-05-02 22:03:37,982 - SimpleServer - INFO - Starting server on localhost:8765
+2025-05-02 22:03:37,982 - SimpleServer - INFO - Server started on ws://localhost:8765
+2025-05-02 22:03:48,606 - websockets.server - INFO - connection open
+2025-05-02 22:03:48,607 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:50,612 - websockets.server - INFO - connection open
+2025-05-02 22:03:50,613 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:52,618 - websockets.server - INFO - connection open
+2025-05-02 22:03:52,619 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:03:54,623 - websockets.server - INFO - connection open
+2025-05-02 22:03:54,624 - websockets.server - ERROR - connection handler failed
+Traceback (most recent call last):
+  File "C:\Users\Navid\AppData\Local\Programs\Python\Python311\Lib\site-packages\websockets\asyncio\server.py", line 376, in conn_handler
+    await self.handler(connection)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: SimpleServer.handle_client() missing 1 required positional argument: 'path'
+2025-05-02 22:04:03,722 - SimpleServer - INFO - Received signal 2, shutting down...
+2025-05-02 22:04:03,722 - SimpleServer - INFO - Server stopped.
+2025-05-02 22:07:22,474 - websockets.server - INFO - server listening on [::1]:8765
+2025-05-02 22:07:22,475 - websockets.server - INFO - server listening on 127.0.0.1:8765
+2025-05-02 22:07:22,475 - SimpleServer - INFO - Starting server on localhost:8765
+2025-05-02 22:07:22,476 - SimpleServer - INFO - Server started on ws://localhost:8765
+2025-05-02 22:08:22,476 - SimpleServer - INFO - Server status: Uptime=1m 0s, Clients=0, Connections=0, Messages processed: {'text': 0, 'binary': 0}
+2025-05-02 22:09:22,490 - SimpleServer - INFO - Server status: Uptime=2m 0s, Clients=0, Connections=0, Messages processed: {'text': 0, 'binary': 0}
+2025-05-02 22:10:22,500 - SimpleServer - INFO - Server status: Uptime=3m 0s, Clients=0, Connections=0, Messages processed: {'text': 0, 'binary': 0}
+2025-05-02 22:11:22,503 - SimpleServer - INFO - Server status: Uptime=4m 0s, Clients=0, Connections=0, Messages processed: {'text': 0, 'binary': 0}
+2025-05-02 22:12:22,515 - SimpleServer - INFO - Server status: Uptime=5m 0s, Clients=0, Connections=0, Messages processed: {'text': 0, 'binary': 0}
+2025-05-02 22:12:49,780 - websockets.server - INFO - connection open
+2025-05-02 22:12:49,781 - SimpleServer - INFO - New connection from ::1:3113
+2025-05-02 22:12:49,782 - SimpleServer - INFO - Client TestUser registered successfully
+2025-05-02 22:13:11,561 - websockets.server - INFO - connection open
+2025-05-02 22:13:11,561 - SimpleServer - INFO - New connection from ::1:3138
+2025-05-02 22:13:11,563 - SimpleServer - INFO - Client TestUser 2 registered successfully
+2025-05-02 22:13:13,344 - SimpleServer - INFO - TestUser 2 requesting connection to TestUser
+2025-05-02 22:13:16,212 - SimpleServer - INFO - TestUser accepted connection from TestUser 2
+2025-05-02 22:13:22,521 - SimpleServer - INFO - Server status: Uptime=6m 0s, Clients=2, Connections=1, Messages processed: {'text': 5, 'binary': 0}
+2025-05-02 22:14:22,518 - SimpleServer - INFO - Server status: Uptime=7m 0s, Clients=2, Connections=1, Messages processed: {'text': 12, 'binary': 151}
+2025-05-02 22:15:22,527 - SimpleServer - INFO - Server status: Uptime=8m 0s, Clients=2, Connections=1, Messages processed: {'text': 18, 'binary': 497}
+2025-05-02 22:16:22,537 - SimpleServer - INFO - Server status: Uptime=9m 0s, Clients=2, Connections=1, Messages processed: {'text': 92, 'binary': 967}
+2025-05-02 22:16:42,184 - websockets.server - INFO - connection open
+2025-05-02 22:16:42,185 - SimpleServer - INFO - New connection from ::1:3287
+2025-05-02 22:16:42,187 - SimpleServer - INFO - Client TestUser_841 registered successfully
+2025-05-02 22:16:50,197 - SimpleServer - INFO - Client TestUser disconnected: sent 1009 (message too big) frame with 2257167 bytes exceeds limit of 1048576 bytes; no close frame received
+2025-05-02 22:16:50,198 - SimpleServer - INFO - Client TestUser disconnected
+2025-05-02 22:16:50,198 - SimpleServer - ERROR - Error sending users list to TestUser: sent 1009 (message too big) frame with 2257167 bytes exceeds limit of 1048576 bytes; no close frame received
+2025-05-02 22:16:50,199 - SimpleServer - ERROR - Error handling client TestUser_841: dictionary changed size during iteration
+2025-05-02 22:16:50,219 - SimpleServer - INFO - Client TestUser_841 disconnected
+2025-05-02 22:16:50,219 - SimpleServer - INFO - Client TestUser 2 disconnected: sent 1009 (message too big) frame with 2257167 bytes exceeds limit of 1048576 bytes; no close frame received
+2025-05-02 22:16:50,220 - SimpleServer - INFO - Client TestUser 2 disconnected
+2025-05-02 22:16:52,223 - websockets.server - INFO - connection open
+2025-05-02 22:16:52,224 - SimpleServer - INFO - New connection from ::1:3295
+2025-05-02 22:16:52,225 - websockets.server - INFO - connection open
+2025-05-02 22:16:52,226 - SimpleServer - INFO - New connection from ::1:3296
+2025-05-02 22:16:52,226 - SimpleServer - INFO - Client TestUser registered successfully
+2025-05-02 22:16:52,227 - SimpleServer - INFO - Client TestUser 2 registered successfully
+2025-05-02 22:16:55,558 - websockets.server - INFO - connection open
+2025-05-02 22:16:55,559 - SimpleServer - INFO - New connection from ::1:3298
+2025-05-02 22:16:55,560 - SimpleServer - INFO - Client TestUser 2_688 registered successfully
+2025-05-02 22:17:03,279 - SimpleServer - INFO - TestUser 2_688 requesting connection to TestUser
+2025-05-02 22:17:08,656 - SimpleServer - INFO - TestUser 2_688 requesting connection to TestUser
+2025-05-02 22:17:08,837 - SimpleServer - INFO - TestUser 2_688 requesting connection to TestUser
+2025-05-02 22:17:08,992 - SimpleServer - INFO - TestUser 2_688 requesting connection to TestUser
+2025-05-02 22:17:09,160 - SimpleServer - INFO - TestUser 2_688 requesting connection to TestUser
+2025-05-02 22:17:11,854 - SimpleServer - INFO - TestUser accepted connection from TestUser 2_688
+2025-05-02 22:17:22,554 - SimpleServer - INFO - Server status: Uptime=10m 0s, Clients=3, Connections=1, Messages processed: {'text': 105, 'binary': 1074}
+2025-05-02 22:17:30,414 - SimpleServer - INFO - TestUser rejected connection from TestUser 2_688: Request declined by user
+2025-05-02 22:17:33,107 - SimpleServer - INFO - TestUser rejected connection from TestUser 2_688: Request declined by user
+2025-05-02 22:17:33,533 - SimpleServer - INFO - TestUser rejected connection from TestUser 2_688: Request declined by user
+2025-05-02 22:17:34,067 - SimpleServer - INFO - TestUser rejected connection from TestUser 2_688: Request declined by user
+2025-05-02 22:17:37,813 - websockets.server - INFO - connection open
+2025-05-02 22:17:37,814 - SimpleServer - INFO - New connection from ::1:3323
+2025-05-02 22:17:37,816 - SimpleServer - INFO - Client TestUser_489 registered successfully
+2025-05-02 22:17:47,352 - SimpleServer - INFO - Client TestUser_489 disconnected
+2025-05-02 22:17:47,463 - SimpleServer - INFO - Client TestUser disconnected: no close frame received or sent
+2025-05-02 22:17:47,464 - SimpleServer - INFO - Client TestUser disconnected
+2025-05-02 22:18:14,292 - SimpleServer - INFO - Received signal 2, shutting down...
+2025-05-02 22:18:14,293 - SimpleServer - INFO - Server stopped.
+2025-05-02 22:18:14,294 - SimpleServer - INFO - Client TestUser 2 disconnected
+2025-05-02 22:18:14,295 - SimpleServer - INFO - Client TestUser 2_688 disconnected
