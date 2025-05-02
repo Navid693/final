@@ -4,12 +4,13 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QGroupBox, QRadioButton, QDialog, QMessageBox,
     QScrollArea, QFormLayout, QMainWindow, QAction, QStatusBar, QTextEdit,
     QSplitter, QSlider, QSpinBox, QComboBox, QCheckBox, QSizePolicy, QPlainTextEdit,
-    QSpacerItem # Import QSpacerItem
+    QSpacerItem, QFrame # Import QSpacerItem and QFrame
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont, QPalette, QIcon
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 import utils # Import utils to get monitor list
 import screeninfo # To get monitor info
+import time
 
 class LoginWindow(QWidget):
     """Window for user login."""
@@ -653,6 +654,8 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
     monitor_changed_signal = pyqtSignal(int) # Emit monitor index (1-based)
     # Add theme toggle signal
     toggle_theme_signal = pyqtSignal() # Signal to toggle theme
+    # Add fullscreen toggle signal
+    toggle_fullscreen_signal = pyqtSignal() # Signal to toggle fullscreen mode
 
     # Default stream settings
     DEFAULT_QUALITY = 75
@@ -661,6 +664,22 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
     DEFAULT_MONITOR_INDEX = 1 # Default to primary monitor
     # Preset FPS values for ComboBox
     FPS_OPTIONS = [5, 10, 15, 20, 25, 30]
+    
+    # WebSocket connection status constants (Keep for status bar maybe, but indicator is for peer)
+    WS_STATUS_CONNECTED = "ws_connected"
+    WS_STATUS_CONNECTING = "ws_connecting"
+    WS_STATUS_DISCONNECTED = "ws_disconnected"
+    
+    # --- Peer Connection Status Constants (for the indicator) ---
+    PEER_STATUS_CONNECTED = "peer_connected"
+    PEER_STATUS_CONNECTING = "peer_connecting" # Requesting connection
+    PEER_STATUS_DISCONNECTED = "peer_disconnected"
+    # --- End Peer Connection Status Constants ---
+    
+    # User role constants
+    ROLE_IDLE = "idle"
+    ROLE_SHARING = "sharing"
+    ROLE_VIEWING = "viewing"
 
     def __init__(self, username="Unknown User", current_theme="dark"): # Pass username and theme
         super().__init__()
@@ -674,26 +693,174 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         # Store the last base status message for FPS updates
         self._last_base_status = "Ready"
         self._last_displayed_fps = 0.0
+        
+        # New attributes for toolbar features
+        self._peer_connection_status = self.PEER_STATUS_DISCONNECTED # Renamed state variable
+        self._current_role = self.ROLE_IDLE
+        self._connected_peer_username = ""
+        self._is_fullscreen = False
+        
+        # Session timer
+        self._session_start_time = None
+        self._session_timer = QTimer(self)
+        self._session_timer.setInterval(1000)  # Update every second
+        self._session_timer.timeout.connect(self._update_session_time)
+        self._session_duration = 0  # Duration in seconds
 
-        print("[DEBUG] Creating MainWindow with toolbar buttons only on the right side")
+        print("[DEBUG] Creating MainWindow with enhanced toolbar")
         
         # Setup UI
         self.setWindowTitle(f"SCU Remote Desktop - {self.username}")
-        self.setMinimumSize(800, 600)
+        self.resize(1280, 720) # Increase default width further
         
-        # Create toolbar for theme toggle and logout (RIGHT SIDE ONLY)
-        toolbar = self.addToolBar("Theme")
+        # Create enhanced toolbar with sections
+        self._create_toolbar()
+        
+        # --- Create Enhanced Status Bar ---
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
+        
+        # Create labels for permanent widgets (right side)
+        self.control_status_label = QLabel("Control: N/A")
+        self.control_status_label.setObjectName("controlStatusLabel")
+        self.control_status_label.setToolTip("Indicates if you control the remote peer, or if they control you")
+        
+        self.mode_status_label = QLabel("Mode: Idle")
+        self.mode_status_label.setObjectName("modeStatusLabel")
+        self.mode_status_label.setToolTip("Current interaction mode (Idle, Sharing, Viewing)")
+        
+        self.quality_status_label = QLabel(f"Quality: {self.DEFAULT_QUALITY}%")
+        self.quality_status_label.setObjectName("qualityStatusLabel")
+        self.quality_status_label.setToolTip("Current stream quality setting (when sharing)")
+
+        self.fps_status_label = QLabel("FPS: 0.0") # Renamed from fps_status_bar_label
+        self.fps_status_label.setObjectName("fpsStatusLabel")
+        self.fps_status_label.setToolTip("Received frames per second (when viewing)")
+
+        # Add labels as permanent widgets (added right-to-left)
+        self.statusBar.addPermanentWidget(self.control_status_label)
+        self.statusBar.addPermanentWidget(self._create_status_bar_separator()) # Add separator
+        self.statusBar.addPermanentWidget(self.mode_status_label)
+        self.statusBar.addPermanentWidget(self._create_status_bar_separator()) # Add separator
+        self.statusBar.addPermanentWidget(self.quality_status_label)
+        self.statusBar.addPermanentWidget(self._create_status_bar_separator()) # Add separator
+        self.statusBar.addPermanentWidget(self.fps_status_label)
+        
+        # Set initial message for the temporary message area (left side)
+        self.statusBar.showMessage("Initializing...", 3000) 
+        # --- End Enhanced Status Bar ---
+        
+        # Setup main UI components
+        self.initUI()
+        self.set_disconnected_state() # Initial state
+        
+        # Connect quality signal to update status bar
+        self.quality_changed_signal.connect(self.update_quality_display) 
+
+    def _create_toolbar(self):
+        """Creates the enhanced toolbar with status indicators and controls."""
+        toolbar = self.addToolBar("Main Toolbar")
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
+        toolbar.setObjectName("main_toolbar") 
+        toolbar.setContentsMargins(5, 2, 5, 2) 
+        toolbar.layout().setSpacing(8) # Increase spacing slightly without separators
         
-        # Add spacer to push buttons to the right
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        toolbar.addWidget(spacer)
+        # LEFT SECTION: Connection Status and Role
+        self.peer_indicator_label = QLabel()
+        self.peer_indicator_label.setObjectName("peer_status_indicator") 
+        self.peer_indicator_label.setFixedSize(14, 14)
+        self.peer_indicator_label.setToolTip("Peer Connection Status")
+        toolbar.addWidget(self.peer_indicator_label)
         
-        # Theme Toggle Button (right side)
+        self.peer_status_text_label = QLabel("Disconnected") 
+        self.peer_status_text_label.setObjectName("peer_status_text_label") 
+        toolbar.addWidget(self.peer_status_text_label)
+        
+        self.peer_status_label = QLabel("Peer: None")
+        self.peer_status_label.setObjectName("peer_username_label") 
+        toolbar.addWidget(self.peer_status_label)
+        
+        self.role_label = QLabel("Role: Idle")
+        self.role_label.setObjectName("role_label") 
+        toolbar.addWidget(self.role_label)
+        
+        self.session_timer_label = QLabel("Session: 00:00:00")
+        self.session_timer_label.setObjectName("session_timer_label") 
+        self.session_timer_label.setToolTip("Current session duration")
+        toolbar.addWidget(self.session_timer_label)
+        
+        # CENTER SECTION: Quick Actions 
+        self.quick_share_button = QPushButton("Share Screen")
+        self.quick_share_button.setObjectName("quick_share_button") 
+        self.quick_share_button.setToolTip("Start sharing your screen")
+        self.quick_share_button.clicked.connect(self.on_start_sharing_clicked)
+        toolbar.addWidget(self.quick_share_button)
+        
+        self.quick_stop_button = QPushButton("Stop Sharing")
+        self.quick_stop_button.setObjectName("quick_stop_button") 
+        self.quick_stop_button.setToolTip("Stop sharing your screen")
+        self.quick_stop_button.clicked.connect(self.on_stop_sharing_clicked)
+        self.quick_stop_button.setEnabled(False)
+        toolbar.addWidget(self.quick_stop_button)
+        
+        self.quick_disconnect_button = QPushButton("Disconnect Peer")
+        self.quick_disconnect_button.setObjectName("quick_disconnect_button") 
+        self.quick_disconnect_button.setToolTip("Disconnect from peer")
+        self.quick_disconnect_button.clicked.connect(self.disconnect_signal.emit)
+        self.quick_disconnect_button.setEnabled(False)
+        toolbar.addWidget(self.quick_disconnect_button)
+        
+        # RIGHT SECTION: Icons
+        # Add Log Button
+        self.log_button = QPushButton("📄") # Document emoji
+        self.log_button.setObjectName("log_button")
+        self.log_button.setToolTip("Show Logs (Not Implemented)")
+        self.log_button.setFlat(True)
+        self.log_button.setCursor(Qt.PointingHandCursor)
+        self.log_button.setMinimumSize(35, 35)
+        # self.log_button.clicked.connect(self.on_show_logs_clicked) # Connect later
+        toolbar.addWidget(self.log_button)
+        
+        # Screenshot Button
+        self.screenshot_button = QPushButton()
+        self.screenshot_button.setObjectName("screenshot_button")
+        self.screenshot_button.setToolTip("Take Screenshot (Not Implemented)")
+        self.screenshot_button.setIcon(QIcon("screenshot.png"))
+        self.screenshot_button.setIconSize(QSize(24, 24))
+        self.screenshot_button.setFlat(True)
+        self.screenshot_button.setCursor(Qt.PointingHandCursor)
+        self.screenshot_button.setMinimumSize(35, 35)
+        # self.screenshot_button.clicked.connect(self.on_screenshot_clicked) # Connect later
+        toolbar.addWidget(self.screenshot_button)
+        
+        # Screen Recorder Button
+        self.recorder_button = QPushButton()
+        self.recorder_button.setObjectName("recorder_button")
+        self.recorder_button.setToolTip("Toggle Recording (Not Implemented)")
+        self.recorder_button.setIcon(QIcon("screen recorder.png")) # Use correct filename
+        self.recorder_button.setIconSize(QSize(24, 24))
+        self.recorder_button.setFlat(True)
+        self.recorder_button.setCursor(Qt.PointingHandCursor)
+        self.recorder_button.setMinimumSize(35, 35)
+        # self.recorder_button.clicked.connect(self.on_recorder_toggled) # Connect later
+        toolbar.addWidget(self.recorder_button)
+        
+        # Fullscreen Toggle Button
+        self.fullscreen_button = QPushButton()
+        self.fullscreen_button.setObjectName("fullscreen_button") 
+        self.fullscreen_button.setToolTip("Toggle Fullscreen Mode")
+        self.fullscreen_button.setFlat(True)
+        self.fullscreen_button.setCursor(Qt.PointingHandCursor)
+        self.fullscreen_button.setMinimumSize(35, 35)
+        self.fullscreen_button.setText("⛶") # Set icon text directly
+        
+        self.fullscreen_button.clicked.connect(self._toggle_fullscreen)
+        toolbar.addWidget(self.fullscreen_button)
+        
+        # Theme Toggle Button
         self.theme_button = QPushButton()
-        self.theme_button.setObjectName("theme_button")
+        self.theme_button.setObjectName("theme_button") 
         self.theme_button.setToolTip("Toggle Light/Dark Mode")
         self.theme_button.setFlat(True)
         self.theme_button.setCursor(Qt.PointingHandCursor)
@@ -708,9 +875,9 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.theme_button.clicked.connect(self.toggle_theme_signal.emit)
         toolbar.addWidget(self.theme_button)
         
-        # Logout Button (right side)
+        # Logout Button
         self.toolbar_logout_button = QPushButton()
-        self.toolbar_logout_button.setObjectName("toolbar_logout_button")
+        self.toolbar_logout_button.setObjectName("toolbar_logout_button") 
         self.toolbar_logout_button.setToolTip("Logout")
         self.toolbar_logout_button.setFlat(True)
         self.toolbar_logout_button.setCursor(Qt.PointingHandCursor)
@@ -722,14 +889,9 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.toolbar_logout_button.clicked.connect(self.logout_signal.emit)
         toolbar.addWidget(self.toolbar_logout_button)
         
-        # Create status bar
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        self.update_status("Initializing...")
-        
-        # Setup main UI components
-        self.initUI()
-        self.set_disconnected_state() # Initial state
+        # Initial UI update for status elements
+        self._update_peer_connection_status_ui() 
+        self._update_role_ui()
 
     def initUI(self):
         # Main central widget and layout
@@ -871,6 +1033,7 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.mouse_permission_checkbox = QCheckBox("Allow Peer Mouse Control")
         self.mouse_permission_checkbox.setObjectName("mouse_permission_checkbox")
         self.mouse_permission_checkbox.toggled.connect(self._toggle_mouse_permission)
+        self.mouse_permission_checkbox.toggled.connect(self.update_control_status_display) # Connect to status update
         self.mouse_permission_checkbox.setEnabled(False) # Disabled until connected
         controls_layout.addWidget(self.mouse_permission_checkbox)
 
@@ -982,124 +1145,183 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
     def append_chat_message(self, message):
         self.chat_display.appendPlainText(message)
 
-    def update_status(self, status, is_base_message=True):
-        """Updates the status bar message, preserving FPS if available."""
-        if is_base_message:
-            self._last_base_status = status # Store the new base status
-            
-        current_status = self._last_base_status
-        if self._last_displayed_fps > 0:
-            current_status += f" (Recv FPS: {self._last_displayed_fps:.1f})"
+    def show_status_message(self, status, timeout=0):
+        """Shows a temporary message in the status bar's main area.
+        
+        Args:
+            status: The message string to display.
+            timeout: Duration in milliseconds (0 = permanent until replaced).
+        """
+        self.statusBar.showMessage(status, timeout)
 
-        self.statusBar.showMessage(current_status)
-
-    # --- New Slot for FPS updates ---
-    def update_fps_display(self, fps):
-        """Updates the FPS part of the status bar message."""
-        self._last_displayed_fps = fps
-        # Update the full status bar text using the last base message
-        self.update_status(self._last_base_status, is_base_message=False)
+    def update_quality_display(self, quality):
+        """Updates the Quality status bar label."""
+        self.quality_status_label.setText(f"Quality: {quality}%")
+        
+    # --- New method to update WebSocket status label --- (Keep for now, might remove later)
+    def update_ws_status(self, status_text):
+        """Updates the (now potentially unused) WebSocket status label in the status bar."""
+        # self.ws_status_bar_label.setText(f"WS: {status_text}")
+        pass # Commented out as we removed the WS label
 
     # --- State Management Methods (called by AppController) ---
 
     def set_connected_state(self, connected_to_uid):
-        """Update UI state when connected to a peer."""
-        if not connected_to_uid:
-            # No UID means effectively disconnected
-            self.set_disconnected_state("Not connected to any peer.")
-            return
-            
-        # Update button states
+        """Updates UI to show connected state.
+        
+        Args:
+            connected_to_uid: UID of the connected peer
+        """
+        print(f"Setting connected state to peer: {connected_to_uid}")
+        self.disconnect_button.setEnabled(True)
         self.request_view_button.setEnabled(False)
         self.peer_input.setEnabled(False)
-        self.disconnect_button.setEnabled(True)
+        self.sharer_groupbox.setEnabled(True)  # Enable sharing controls
         
-        # Enable appropriate controls
-        self.sharer_groupbox.setEnabled(True)
-        self.sharer_groupbox.setChecked(False)
-        self.start_sharing_button.setEnabled(True)
-        self.stop_sharing_button.setEnabled(False)
-        self.settings_groupbox.setVisible(False)
-        self.settings_groupbox.setEnabled(False)
+        # New toolbar updates
+        self.set_peer_connection_status(self.PEER_STATUS_CONNECTED)
+        self._connected_peer_username = connected_to_uid
+        self._update_peer_status_ui()
+        self.quick_disconnect_button.setEnabled(True)
+        self.quick_share_button.setEnabled(True)
         
-        # Enable mouse permission control
-        self.mouse_permission_checkbox.setEnabled(True)
+        # Start session timer
+        self._start_session_timer()
         
         # Update status
-        self._last_base_status = f"Connected to {connected_to_uid}. Ready."
-        self.update_status(self._last_base_status)
-        self._last_displayed_fps = 0
+        status_msg = f"Connected to {connected_to_uid}"
+        self.show_status_message(status_msg)
+        
+        # Reset FPS display if it was showing
+        if self._last_displayed_fps > 0:
+            self.update_fps_display(0)
+        
+        # Add connection message to chat
+        self.append_chat_message(f"Connected to {connected_to_uid}")
+        
+        # Check if sharing checkbox is on, and if so, enable settings
+        if self.sharer_groupbox.isChecked():
+            self.settings_groupbox.setVisible(True)
+            self.settings_groupbox.setEnabled(True)
+            # Don't auto-start sharing
+        else:
+            self.settings_groupbox.setVisible(False)
+            self.settings_groupbox.setEnabled(False)
 
     def set_disconnected_state(self, message="Ready"):
-        """Reset UI state when disconnected from peer."""
-        # Reset connection controls
+        """Updates UI to show disconnected state.
+        
+        Args:
+            message: Optional status message to display
+        """
+        print(f"Setting disconnected state with message: {message}")
+        self.disconnect_button.setEnabled(False)
         self.request_view_button.setEnabled(True)
         self.peer_input.setEnabled(True)
-        self.disconnect_button.setEnabled(False)
         
-        # Reset sharer controls
+        # Disable sharing controls
         self.sharer_groupbox.setEnabled(False)
-        self.sharer_groupbox.setChecked(False)  # Uncheck
-        self.start_sharing_button.setEnabled(False)
-        self.stop_sharing_button.setEnabled(False)
+        self.sharer_groupbox.setChecked(False) # Uncheck
         self.settings_groupbox.setVisible(False)
         self.settings_groupbox.setEnabled(False)
         
-        # Reset mouse permission control
-        self.mouse_permission_checkbox.setEnabled(False)
-        self.mouse_permission_checkbox.setChecked(False)  # Uncheck
+        # Turn off mouse permission checkbox if it was on
+        self.mouse_permission_checkbox.setChecked(False)
+        self.screen_display_widget.set_view_only(True)
         
-        # Set screen display to view-only
-        if hasattr(self, 'screen_display_widget') and self.screen_display_widget:
-            self.screen_display_widget.set_view_only(True)
-            print("[DEBUG UI] Set screen display to view-only mode on disconnect")
+        # Reset screen display (remove any image)
+        self.screen_display_widget.pixmap = QPixmap() # Clear the pixmap
+        self.screen_display_widget.update() # Trigger repaint to show blank state
         
-        # Update status bar
-        self._last_base_status = message # Remember status message for possible FPS overlay
-        # Use the provided message, or default to "Disconnected"
-        status_msg = message if message != "Ready" else "Disconnected. Ready."
-        self.update_status(status_msg)
-        self.screen_display_widget.update_screen(b'')
-        self._last_displayed_fps = 0
-
+        # New toolbar updates
+        self.set_peer_connection_status(self.PEER_STATUS_DISCONNECTED) # Update peer status
+        self._connected_peer_username = ""
+        self._update_peer_status_ui()
+        self.quick_disconnect_button.setEnabled(False)
+        self.quick_share_button.setEnabled(False)
+        self.quick_stop_button.setEnabled(False)
+        
+        # Set role to idle
+        self.set_role(self.ROLE_IDLE)
+        
+        # Stop session timer
+        self._stop_session_timer()
+        self._update_session_time() # Reset display to 00:00:00
+        
+        # Update status
+        self.show_status_message(message)
+        
+        # Reset FPS display if it was showing
+        if self._last_displayed_fps > 0:
+            self.update_fps_display(0)
 
     def set_sharing_state(self, is_sharing):
-        """Updates UI elements based on active sharing state."""
-        # Update check state of the main group box
+        """Updates UI to reflect screen sharing state.
+        
+        Args:
+            is_sharing: True if screen is being shared, False otherwise
+        """
+        print(f"Setting sharing state to: {is_sharing}")
+        
+        # Update the role
+        self.set_role(self.ROLE_SHARING if is_sharing else self.ROLE_IDLE)
+        
+        # Update buttons
         self.sharer_groupbox.setChecked(is_sharing)
-
-        # Enable/Disable Start/Stop buttons
         self.start_sharing_button.setEnabled(not is_sharing)
         self.stop_sharing_button.setEnabled(is_sharing)
-
-        # Show/Hide and Enable/Disable the settings group box
-        self.settings_groupbox.setVisible(is_sharing)
-        self.settings_groupbox.setEnabled(is_sharing)
-
-        # Update status bar message
+        
+        # Update toolbar quick action buttons
+        self.quick_share_button.setEnabled(not is_sharing and bool(self._connected_peer_username))
+        self.quick_stop_button.setEnabled(is_sharing)
+        
+        # Display settings if sharing
         if is_sharing:
-             monitor_text = self.monitor_combobox.currentText()
-             self.update_status(f"Sharing {monitor_text}...")
+            self.settings_groupbox.setVisible(True)
+            self.settings_groupbox.setEnabled(True)
         else:
-             # Revert status
-             if self.disconnect_button.isEnabled():
-                  peer_uid = self.peer_input.text().strip()
-                  status_msg = f"Connected to {peer_uid}. Ready."
-                  if peer_uid == "": status_msg = "Connected. Ready."
-                  self.update_status(status_msg)
-             else:
-                  self.update_status("WebSocket Connected. Ready.")
-        self.update_fps_display(0)
-
+            self.settings_groupbox.setVisible(False)
+            self.settings_groupbox.setEnabled(False)
+            
+        # Update status message
+        if is_sharing:
+            self.show_status_message(f"Sharing screen to {self._connected_peer_username}")
+        elif self._connected_peer_username:
+            self.show_status_message(f"Connected to {self._connected_peer_username}")
+        else:
+            self.show_status_message("Ready")
 
     def update_remote_screen(self, image_data):
-        """Pass image data to the display widget."""
+        """Updates the screen display with remote screen image and sets viewing state."""
+        # Call original implementation
         self.screen_display_widget.update_screen(image_data)
+        
+        # Set viewing state to true when receiving a screen image
+        if image_data and self._current_role != self.ROLE_VIEWING:
+            self.set_viewing_state(True)
 
     def update_remote_cursor(self, x, y):
         """Pass cursor data to the display widget."""
         self.screen_display_widget.update_remote_cursor(x, y)
 
+    def set_viewing_state(self, is_viewing):
+        """Updates UI to reflect screen viewing state.
+        
+        Args:
+            is_viewing: True if viewing remote screen, False otherwise
+        """
+        print(f"Setting viewing state to: {is_viewing}")
+        
+        # Update the role
+        self.set_role(self.ROLE_VIEWING if is_viewing else self.ROLE_IDLE)
+        
+        # Update status message
+        if is_viewing:
+            self.show_status_message(f"Viewing {self._connected_peer_username}'s screen")
+        elif self._connected_peer_username:
+            self.show_status_message(f"Connected to {self._connected_peer_username}")
+        else:
+            self.show_status_message("Ready")
 
     # --- Button Click Handlers ---
     # These now primarily emit signals. AppController handles the logic & state updates.
@@ -1158,4 +1380,165 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         font = self.theme_button.font()
         font.setPointSize(14)  # Larger font for emoji
         self.theme_button.setFont(font)
+
+    def _toggle_fullscreen(self):
+        """Toggle fullscreen mode."""
+        if self.isFullScreen():
+            self.showNormal()
+            self.fullscreen_button.setText("⛶")  # Unicode expand symbol
+            self.fullscreen_button.setToolTip("Enter Fullscreen Mode")
+            self._is_fullscreen = False
+        else:
+            self.showFullScreen()
+            self.fullscreen_button.setText("⛫")  # Unicode exit fullscreen symbol
+            self.fullscreen_button.setToolTip("Exit Fullscreen Mode")
+            self._is_fullscreen = True
+    
+    def _update_peer_connection_status_ui(self): # Renamed method
+        """Updates the Peer connection status indicator in the toolbar."""
+        status = self._peer_connection_status # Use renamed state variable
+        indicator_style_base = "border-radius: 7px;" # Make it circular
+        
+        # Update the indicator color and text
+        if status == self.PEER_STATUS_CONNECTED:
+            # Green circle for connected
+            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #4CAF50;") # Green
+            self.peer_status_text_label.setText("Connected")
+            self.peer_status_text_label.setStyleSheet("") # Remove inline style
+        elif status == self.PEER_STATUS_CONNECTING:
+            # Yellow circle for connecting
+            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #FFC107;") # Yellow
+            self.peer_status_text_label.setText("Connecting...")
+            self.peer_status_text_label.setStyleSheet("") # Remove inline style
+        else:  # Disconnected (PEER_STATUS_DISCONNECTED)
+            # Red circle for disconnected
+            self.peer_indicator_label.setStyleSheet(indicator_style_base + " background-color: #F44336;") # Red
+            self.peer_status_text_label.setText("Disconnected")
+            self.peer_status_text_label.setStyleSheet("") # Remove inline style
+    
+    def _update_role_ui(self):
+        """Updates the role indicator in the toolbar."""
+        role = self._current_role
+        
+        if role == self.ROLE_SHARING:
+            self.role_label.setText("Role: Sharing")
+            self.role_label.setStyleSheet("") # Remove inline style
+        elif role == self.ROLE_VIEWING:
+            self.role_label.setText("Role: Viewing")
+            self.role_label.setStyleSheet("") # Remove inline style
+        else:  # ROLE_IDLE
+            self.role_label.setText("Role: Idle")
+            self.role_label.setStyleSheet("")  # Reset style
+    
+    def _update_peer_status_ui(self):
+        """Updates the peer connection status in the toolbar."""
+        if self._connected_peer_username:
+            self.peer_status_label.setText(f"Peer: {self._connected_peer_username}")
+            self.peer_status_label.setStyleSheet("") # Remove inline style
+        else:
+            self.peer_status_label.setText("Peer: None")
+            self.peer_status_label.setStyleSheet("")  # Reset style
+    
+    def _start_session_timer(self):
+        """Starts the session timer."""
+        self._session_start_time = time.time()
+        self._session_duration = 0
+        self._session_timer.start()
+        self._update_session_time()  # Update immediately
+    
+    def _stop_session_timer(self):
+        """Stops the session timer."""
+        if self._session_timer.isActive():
+            self._session_timer.stop()
+        self._session_start_time = None
+    
+    def _update_session_time(self):
+        """Updates the session duration display."""
+        if self._session_start_time is not None:
+            # Calculate elapsed time
+            self._session_duration = int(time.time() - self._session_start_time)
+        
+        # Format time as HH:MM:SS
+        hours = self._session_duration // 3600
+        minutes = (self._session_duration % 3600) // 60
+        seconds = self._session_duration % 60
+        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        
+        self.session_timer_label.setText(f"Session: {time_str}")
+    
+    def set_peer_connection_status(self, status): # Renamed method
+        """Sets the Peer connection status and updates the UI indicator.
+        
+        Args:
+            status: One of PEER_STATUS_CONNECTED, PEER_STATUS_CONNECTING, 
+                  or PEER_STATUS_DISCONNECTED
+        """
+        if status not in [self.PEER_STATUS_CONNECTED, 
+                         self.PEER_STATUS_CONNECTING,
+                         self.PEER_STATUS_DISCONNECTED]:
+            print(f"Invalid peer connection status: {status}")
+            return
+        
+        self._peer_connection_status = status # Use renamed state variable
+        self._update_peer_connection_status_ui() # Call renamed update method
+    
+    def set_role(self, role):
+        """Sets the current user role and updates the UI.
+        
+        Args:
+            role: One of ROLE_IDLE, ROLE_SHARING, or ROLE_VIEWING
+        """
+        if role not in [self.ROLE_IDLE, self.ROLE_SHARING, self.ROLE_VIEWING]:
+            print(f"Invalid role: {role}")
+            return
+        
+        self._current_role = role
+        self._update_role_ui()
+        
+        # Update Mode status bar label
+        if role == self.ROLE_SHARING:
+            self.mode_status_label.setText("Mode: Sharing")
+        elif role == self.ROLE_VIEWING:
+            self.mode_status_label.setText("Mode: Viewing")
+        else: # ROLE_IDLE
+            self.mode_status_label.setText("Mode: Idle")
+            
+        # Update quick action buttons based on role
+        if role == self.ROLE_SHARING:
+            self.quick_share_button.setEnabled(False)
+            self.quick_stop_button.setEnabled(True)
+        elif role == self.ROLE_VIEWING:
+            self.quick_share_button.setEnabled(False)
+            self.quick_stop_button.setEnabled(False)
+        else:  # ROLE_IDLE
+            # Enable/disable based on peer connection
+            peer_connected = bool(self._connected_peer_username)
+            self.quick_share_button.setEnabled(peer_connected)
+            self.quick_stop_button.setEnabled(False)
+
+    def _create_status_bar_separator(self):
+        """Helper to create a styled vertical separator for the status bar."""
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        # separator.setStyleSheet("QFrame { color: #AAA; margin-left: 3px; margin-right: 3px; }") # Optional styling
+        return separator
+
+    # --- New method to update Control status label ---
+    def update_control_status_display(self):
+        """Updates the Control status bar label based on current role and permissions."""
+        status_text = "Control: N/A"
+        if self._current_role == self.ROLE_SHARING:
+            # When sharing, status reflects if PEER can control US
+            peer_has_control = self.mouse_permission_checkbox.isChecked() 
+            status_text = f"Control: {'Enabled' if peer_has_control else 'Disabled'} (Peer)"
+        elif self._current_role == self.ROLE_VIEWING:
+            # When viewing, status reflects if WE can control PEER
+            if hasattr(self, 'screen_display_widget') and self.screen_display_widget:
+                we_have_control = not self.screen_display_widget._view_only 
+                status_text = f"Control: {'Enabled' if we_have_control else 'View-Only'} (Self)"
+            else:
+                status_text = "Control: Unknown (UI Error)" # Fallback if widget doesn't exist
+        
+        self.control_status_label.setText(status_text)
 

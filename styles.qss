@@ -392,4 +392,104 @@ LoginWindow QLineEdit {
 LoginWindow QCheckBox {
      padding-top: 5px;
      font-size: 9pt;
+}
+
+/* === Toolbar === */
+QToolBar#main_toolbar {
+    background-color: #1e263c;
+    border-bottom: 1px solid #141a2e;
+    padding: 2px 5px; /* Add a little vertical padding */
+    spacing: 6px; /* Adjust spacing */
+}
+
+/* Labels in Toolbar - Apply Button-like Styling */
+QToolBar#main_toolbar QLabel {
+    background-color: #28344c; /* Background like disabled button */
+    color: #a0a8c0; 
+    padding: 4px 8px; /* Padding like buttons */
+    margin: 0px 1px; /* Small margin */
+    border: 1px solid #38445c; /* Border like buttons */
+    border-radius: 4px; /* Rounded corners */
+    min-height: 18px; /* Ensure consistent height */
+}
+
+/* Specific Toolbar Labels - Status Text (Bold) */
+QLabel#peer_status_text_label {
+    font-weight: bold; 
+    /* Remove other specific label styles if applying general button style */
+}
+
+/* Specific Toolbar Labels - Peer Username (Bold) */
+QLabel#peer_username_label {
+    font-weight: bold;
+    color: #c0c8e0; /* Keep lighter color */
+}
+
+/* Specific Toolbar Labels - Role (Italic) */
+QLabel#role_label {
+    font-style: italic;
+}
+
+/* Specific Toolbar Labels - Session Timer (Dimmer) */
+QLabel#session_timer_label {
+    color: #8088a0;
+}
+
+/* Status Indicator (The Circle) - Keep it simple */
+QLabel#peer_status_indicator {
+    background-color: #F44336; /* Default Red */
+    border: 1px solid #38445c;
+    border-radius: 7px; 
+    min-width: 14px; /* Ensure size */
+    max-width: 14px;
+    min-height: 14px;
+    max-height: 14px;
+    padding: 0px; /* No padding */
+    margin: 0px 2px 0px 0px; /* Margin right */
+}
+
+/* Quick Action Buttons Styling (Already defined) */
+/* QPushButton#quick_share_button { ... } */
+/* QPushButton#quick_stop_button { ... } */
+/* QPushButton#quick_disconnect_button { ... } */
+
+/* Right-side Flat Icon Buttons */
+QToolBar#main_toolbar QPushButton#log_button,
+QToolBar#main_toolbar QPushButton#screenshot_button,
+QToolBar#main_toolbar QPushButton#recorder_button,
+QToolBar#main_toolbar QPushButton#fullscreen_button,
+QToolBar#main_toolbar QPushButton#theme_button,
+QToolBar#main_toolbar QPushButton#toolbar_logout_button {
+    background-color: transparent;
+    border: none;
+    padding: 5px; /* More padding for icon buttons */
+    margin: 0px 1px; 
+    border-radius: 4px; 
+    min-width: 28px; /* Ensure minimum size */
+    min-height: 28px;
+    color: #a0a8c0; /* Icon color for emoji/text */
+}
+
+/* Log button specific font size if emoji is too small */
+QPushButton#log_button { 
+    font-size: 14pt; 
+}
+
+/* Hover/Press for Flat Icon Buttons */
+QToolBar#main_toolbar QPushButton#log_button:hover,
+QToolBar#main_toolbar QPushButton#screenshot_button:hover,
+QToolBar#main_toolbar QPushButton#recorder_button:hover,
+QToolBar#main_toolbar QPushButton#fullscreen_button:hover,
+QToolBar#main_toolbar QPushButton#theme_button:hover,
+QToolBar#main_toolbar QPushButton#toolbar_logout_button:hover {
+    background-color: #303a50; 
+}
+
+QToolBar#main_toolbar QPushButton#log_button:pressed,
+QToolBar#main_toolbar QPushButton#screenshot_button:pressed,
+QToolBar#main_toolbar QPushButton#recorder_button:pressed,
+QToolBar#main_toolbar QPushButton#fullscreen_button:pressed,
+QToolBar#main_toolbar QPushButton#theme_button:pressed,
+QToolBar#main_toolbar QPushButton#toolbar_logout_button:pressed {
+    background-color: #404a60; 
 } 

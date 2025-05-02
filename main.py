@@ -243,12 +243,18 @@ class AppController(
             self.handle_websocket_binary_message
         )
         if self.main_window:  # Connect status only if window exists
+            # Connect the handler's status signal to the main window's message display
             self.websocket_handler.status_update_signal.connect(
-                self.main_window.update_status
+                self.main_window.show_status_message
             )
 
         # Attempt to connect
         print(f"Attempting WebSocket connection to {self.backend_base_url}...")
+        # Set UI status to connecting before starting the connection attempt
+        if self.main_window:
+            self.main_window.update_ws_status("Connecting...")
+            self.main_window.show_status_message("Connecting to WebSocket...")
+            
         self.websocket_handler.connect_ws()  # connect_ws starts the thread
 
     def show_main_window(self):
@@ -348,65 +354,54 @@ class AppController(
 
     # --- WebSocket Signal Handlers ---
     def on_websocket_connected(self):
-        print("Controller: WebSocket Connected!")
-        # --- Stop reconnect timer on successful connection ---
+        """Called when WebSocket connection is established."""
+        print("WebSocket connected successfully!")
+        # If called during reconnect, stop timer
         if self._reconnect_timer.isActive():
-            print("Connection successful, stopping reconnect timer.")
+            print("Stopping reconnect timer as connection established.")
             self._reconnect_timer.stop()
-        self._reconnect_attempts = 0  # Reset attempts counter
+        
+        self._reconnect_attempts = 0  # Reset attempts on successful connection
+        
+        # Update connection status in UI (Only the status bar)
         if self.main_window:
-            self.main_window.update_status("WebSocket Connected. Ready.")
-            # Update button references to match the renamed UI elements
-            self.main_window.request_view_button.setEnabled(
-                True
-            )  # Changed from connect_button
-            self.main_window.peer_input.setEnabled(True)
-            self.main_window.disconnect_button.setEnabled(False)
-            self.main_window.sharer_groupbox.setEnabled(True)
-            self.set_sharing_state(False)  # Use the new method
-            self._last_status_message = "WebSocket Connected. Ready."
-            self.main_window.update_status(self._last_status_message)
-
+            # Update the main status bar, but don't imply peer connection
+            self.main_window.update_ws_status("Connected")
+            self.main_window.show_status_message("WebSocket Connected. Ready.")
+            
     def on_websocket_disconnected(self, reason):
-        print(f"Controller: WebSocket Disconnected. Reason: {reason}")
-        self.stop_screen_sharing()  # Ensure screen sharing stops if active
-        self.control_permissions = {}  # Clear permissions on disconnect
-        if self.main_window:
-            # Use the main window's method to reset UI state
-            self.main_window.set_disconnected_state(f"WebSocket Disconnected: {reason}")
-        self.websocket_handler = None  # Clear the handler
-        self._reset_fps_counter()
-
-        # --- Attempt Reconnect ---
-        if self._reconnect_attempts < self.MAX_RECONNECT_ATTEMPTS:
-            self._reconnect_attempts += 1
-            status_msg = f"WebSocket Disconnected: {reason}. Retrying ({self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS})..."
-            print(status_msg)
+        """Called when WebSocket connection is lost."""
+        print(f"WebSocket disconnected: {reason}")
+        
+        # Start reconnect timer if not already trying to reconnect
+        if (not self._reconnect_timer.isActive() and 
+            self._reconnect_attempts < self.MAX_RECONNECT_ATTEMPTS):
+            print(f"Starting reconnect timer. Attempt {self._reconnect_attempts + 1}/{self.MAX_RECONNECT_ATTEMPTS}")
+            self._reconnect_timer.start(self.RECONNECT_DELAY_MS)
+            
+            # Update UI to show connecting status (Only the status bar)
             if self.main_window:
-                self.main_window.set_disconnected_state(status_msg)  # Update UI
-            self._reconnect_timer.start(
-                self.RECONNECT_DELAY_MS
-            )  # Start timer for next attempt
+                self.main_window.update_ws_status("Reconnecting...")
+                self.main_window.show_status_message(f"WebSocket Disconnected: {reason}. Retrying...")
         else:
-            status_msg = (
-                f"WebSocket Disconnected: {reason}. Max reconnect attempts reached."
-            )
-            print(status_msg)
+            # If we've reached max attempts, show disconnected (Only the status bar)
             if self.main_window:
-                self.main_window.set_disconnected_state(status_msg)
-            self._reconnect_attempts = 0  # Reset for future manual connections
-
+                self.main_window.update_ws_status("Disconnected (Failed)")
+                self.main_window.show_status_message("WebSocket Disconnected. Reconnection failed.")
+                
+        # Disconnect from peer if connected
+        if self.current_peer_uid:
+            self.handle_disconnect() # This will update the peer indicator to disconnected
+            
     def on_websocket_error(self, error_message):
-        print(f"Controller: WebSocket Error: {error_message}")
-        # Stop timer if an error occurs during connection attempt
-        if self._reconnect_timer.isActive():
-            print("Error during reconnect attempt, stopping timer.")
-            self._reconnect_timer.stop()
-        # Optionally show message box
-        # QMessageBox.warning(self.main_window, "WebSocket Error", error_message)
-        # Trigger disconnect logic, which will handle potential reconnect or final failure message
-        self.on_websocket_disconnected(f"Connection Error: {error_message}")
-
+        """Called when a WebSocket error occurs."""
+        print(f"WebSocket error: {error_message}")
+        
+        # Update connection status in UI (Only the status bar)
+        if self.main_window:
+            self.main_window.update_ws_status("Error")
+            self.main_window.show_status_message(f"WebSocket Error: {error_message}")
+            
     def handle_websocket_message(self, message):
         """Handle incoming WebSocket messages"""
         print(
@@ -720,6 +715,12 @@ class AppController(
             and hasattr(self.main_window, "update_remote_screen")
             and hasattr(self.main_window, "update_remote_cursor")
         ):
+            # --- Set Role to Viewing if Idle --- 
+            # Do this *before* processing the frame, only once when starting to view
+            if self.main_window._current_role == ui.MainWindow.ROLE_IDLE:
+                print("[DEBUG] Received first frame, setting role to VIEWING")
+                self.main_window.set_viewing_state(True)
+            
             # --- Increment frame counter ---
             self._received_frame_counter += 1
 
@@ -761,59 +762,89 @@ class AppController(
 
     # --- MainWindow Signal Handlers ---
     def handle_connect_to_peer(self, target_uid):
-        print(
-            f"[DEBUG Client {self.username}] handle_connect_to_peer CALLED with UID: {target_uid}"
-        )
-        if self.websocket_handler and self.websocket_handler.is_connected():
-            # Send connect request
-            message = {"type": "connect_request", "target_uid": target_uid}
-            self.current_peer_uid = target_uid  # Store target
-            self.websocket_handler.send_message(message)
-            if self.main_window:
-                self._last_status_message = f"Attempting connection to {target_uid}..."
-                self.main_window.update_status(self._last_status_message)
-
-            # --- !!! TEMPORARY FIX FOR TESTING WITHOUT REAL BACKEND !!! ---
-            # Simulate the backend sending back a success status immediately.
-            # The real backend MUST send this message.
-            print("[TEMP DEBUG] Simulating connection_status success message.")
-            temp_success_message = {
-                "type": "connection_status",
-                "status": "connected_to_peer",
-                "peer_uid": target_uid,  # Echo back the target UID
-                "message": "Connection successful (Simulated)",
-            }
-            self.handle_websocket_message(temp_success_message)
-            # --- END TEMPORARY FIX ---
-
-        else:
+        """Handles connection to another peer."""
+        if not target_uid:
+            print("Empty target UID provided. Cannot connect.")
             QMessageBox.warning(
-                self.main_window,
-                "Error",
-                "WebSocket not connected. Cannot connect to peer.",
+                self.main_window, "Connection Error", "Please enter a valid peer username."
             )
-
+            return
+        
+        if not self.websocket_handler or not self.websocket_handler.is_connected():
+            print("Cannot connect to peer: WebSocket not connected.")
+            QMessageBox.warning(
+                self.main_window, "Connection Error", "WebSocket connection is not established."
+            )
+            if self.main_window:
+                self.main_window.set_connection_status(ui.MainWindow.CONNECTION_STATUS_DISCONNECTED)
+            return
+        
+        print(f"Attempting to connect to peer: {target_uid}")
+        
+        # Disconnect from current peer first if there is one
+        if self.current_peer_uid:
+            print(f"Already connected to {self.current_peer_uid}. Disconnecting first.")
+            self.handle_disconnect()
+        
+        try:
+            # Store the target UID and update UI
+            self.current_peer_uid = target_uid
+            
+            # Send 'connect' message to server
+            self.websocket_handler.send_message(
+                {
+                    "type": "connect",
+                    "target_uid": target_uid,
+                }
+            )
+            
+            # Update UI
+            if self.main_window:
+                self.main_window.set_connected_state(target_uid)
+                
+        except Exception as e:
+            print(f"Error connecting to peer: {e}")
+            self.current_peer_uid = None
+            if self.main_window:
+                self.main_window.set_disconnected_state(f"Connection failed: {e}")
+                
     def handle_disconnect(self):
-        print(f"Controller: Request to disconnect from peer/session")
-        self.stop_screen_sharing()
-        if self.websocket_handler and self.current_peer_uid:
-            peer_to_notify = self.current_peer_uid
-            print(
-                f"[DEBUG Client {self.username}] Sending disconnect notice for peer {peer_to_notify}"
-            )
-            disconnect_msg = {"type": "disconnect_notice", "sender_uid": self.username}
-            self.websocket_handler.send_message(disconnect_msg)
-            print(f"[DEBUG Client {self.username}] Disconnect notice sent.")
-
-        # Reset peer state FOR THIS CLIENT
-        self.current_peer_uid = None
-
-        # Reset UI via MainWindow method
-        if self.main_window:
-            self._last_status_message = "Disconnected from peer."
-            self.main_window.set_disconnected_state(self._last_status_message)
-        self._reset_fps_counter()
-
+        """Handles disconnection from current peer."""
+        if not self.current_peer_uid:
+            print("Not currently connected to a peer.")
+            return
+            
+        print(f"Disconnecting from peer: {self.current_peer_uid}")
+        
+        try:
+            # Stop sharing if active
+            if self._is_sharing_screen:
+                self.stop_screen_sharing()
+                
+            # Send disconnect message
+            if self.websocket_handler and self.websocket_handler.is_connected():
+                self.websocket_handler.send_message(
+                    {
+                        "type": "disconnect",
+                        "target_uid": self.current_peer_uid,
+                    }
+                )
+            
+            # Update state and UI
+            previous_peer = self.current_peer_uid
+            self.current_peer_uid = None
+            
+            if self.main_window:
+                self.main_window.set_disconnected_state(f"Disconnected from {previous_peer}")
+                self.main_window.set_viewing_state(False)  # Ensure viewing state is reset
+            
+        except Exception as e:
+            print(f"Error during disconnect: {e}")
+            # Still reset state even if error occurs
+            self.current_peer_uid = None
+            if self.main_window:
+                self.main_window.set_disconnected_state(f"Error during disconnect: {e}")
+                
     def handle_send_chat(self, message):
         print(f"Controller: Request to send chat message: {message}")
         if self.websocket_handler and self.websocket_handler.is_connected():
@@ -993,53 +1024,39 @@ class AppController(
 
     # --- Screen Sharing Logic ---
     def start_screen_sharing(self):
-        """Start sharing the screen if we are properly connected"""
-        print(f"[DEBUG Client {self.username}] START screen sharing called")
-
-        # Check if we're connected to a peer
-        if not self.websocket_handler or not self.websocket_handler.is_connected():
-            QMessageBox.warning(
-                self.main_window,
-                "Error",
-                "WebSocket not connected. Cannot start sharing.",
-            )
-            return
-
-        # Check if we have a current peer UID
+        """Initiates screen sharing if permissions allow."""
         if not self.current_peer_uid:
+            print("No peer connected. Cannot start sharing.")
             QMessageBox.warning(
-                self.main_window,
-                "Error",
-                "Not connected to any peer. Cannot start sharing.",
+                self.main_window, "Sharing Error", "No peer connected. Please connect to a peer first."
             )
             return
-
-        # Request permission from the peer before sharing
-        print(
-            f"[DEBUG] Requesting permission to share screen with {self.current_peer_uid}"
-        )
-
-        # Update UI to indicate we're waiting for permission
-        if self.main_window:
-            self.main_window.update_status(
-                f"Requesting permission to share screen with {self.current_peer_uid}..."
-            )
-            self.main_window.start_sharing_button.setEnabled(False)
-
-        # Send permission request
-        message = {
-            "type": "request_share_permission",
-            "target_uid": self.current_peer_uid,
-            "sender_uid": self.username,
-            "message": f"User '{self.username}' wants to share their screen with you.",
-        }
-        self.websocket_handler.send_message(message)
-
-        # The actual sharing will start when we receive the permission response
-        print(
-            f"[DEBUG] Sent share permission request to {self.current_peer_uid}, waiting for response"
-        )
-
+            
+        if self._is_sharing_screen:
+            print("Already sharing screen. Ignoring request.")
+            return
+            
+        print(f"Starting screen sharing to peer: {self.current_peer_uid}")
+        
+        try:
+            # Set sharing state in UI
+            if self.main_window:
+                self.main_window.set_sharing_state(True)
+                
+            # Start sharing thread
+            self._screen_sharing_stopevent.clear()
+            self.start_screen_sharing_thread()
+            
+            # Update state
+            self._is_sharing_screen = True
+            
+        except Exception as e:
+            print(f"Error starting screen sharing: {e}")
+            self._is_sharing_screen = False
+            if self.main_window:
+                self.main_window.set_sharing_state(False)
+                self.main_window.show_status_message(f"Error starting screen sharing: {e}")
+                
     def start_screen_sharing_thread(self):
         """Actually start the screen sharing thread after permission is granted"""
         print(f"[DEBUG Client {self.username}] Starting screen sharing thread")
@@ -1084,46 +1101,38 @@ class AppController(
             self.main_window.update_status(self._last_status_message)
 
     def stop_screen_sharing(self):
-        """Signals the screen sharing thread to stop."""
+        """Stops active screen sharing."""
         if not self._is_sharing_screen:
-            print("Screen sharing not active.")
+            print("Not currently sharing screen. Ignoring request.")
             return
-
-        print("Stopping screen sharing...")
-        # --- Send status message BEFORE stopping thread ---
-        if (
-            self._is_sharing_screen
-            and self.websocket_handler
-            and self.websocket_handler.is_connected()
-        ):
-            print(f"[DEBUG {self.username}] Sending sharing_stopped notice.")
-            status_msg = {"type": "sharing_stopped", "sender_uid": self.username}
-            self.websocket_handler.send_message(status_msg)
-        # --- End Send status message ---
-        self._is_sharing_screen = False
-        self._screen_sharing_stopevent.set()
-
-        # Wait briefly for thread to finish (optional, but good practice)
-        if self._screen_sharing_thread and self._screen_sharing_thread.is_alive():
-            self._screen_sharing_thread.join(timeout=0.5)
-        self._screen_sharing_thread = None
-
-        # Update UI state
-        if self.main_window:
-            self.main_window.start_sharing_button.setEnabled(True)
-            self.main_window.stop_sharing_button.setEnabled(False)
-
-        print("Screen sharing stopped.")
-        self.set_sharing_state(False)  # Use the new method
-        if self.main_window:
-            # Try to revert status based on connection state
-            if self.current_peer_uid:
-                self._last_status_message = (
-                    f"Connected to {self.current_peer_uid}. Ready."
-                )
-            else:
-                self._last_status_message = "Ready."
-            self.main_window.update_status(self._last_status_message)
+            
+        print("Stopping screen sharing")
+        
+        try:
+            # Signal the thread to stop
+            self._screen_sharing_stopevent.set()
+            
+            # Wait for thread to finish if it exists
+            if self._screen_sharing_thread and self._screen_sharing_thread.is_alive():
+                self._screen_sharing_thread.join(2.0)  # Wait up to 2 seconds
+                if self._screen_sharing_thread.is_alive():
+                    print("Warning: Screen sharing thread did not terminate gracefully.")
+                    
+            # Clean up
+            self._screen_sharing_thread = None
+            self._is_sharing_screen = False
+            
+            # Update UI
+            if self.main_window:
+                self.main_window.set_sharing_state(False)
+                
+        except Exception as e:
+            print(f"Error stopping screen sharing: {e}")
+            # Still reset state even if error occurs
+            self._is_sharing_screen = False
+            if self.main_window:
+                self.main_window.set_sharing_state(False)
+                self.main_window.show_status_message(f"Error stopping screen sharing: {e}")
 
     def _screen_sharing_loop(self):
         print(
@@ -1239,16 +1248,30 @@ class AppController(
     # --- New Slot for Reconnect Timer ---
     @pyqtSlot()
     def _attempt_reconnect(self):
-        print(
-            f"Reconnect timer timed out. Attempting connection #{self._reconnect_attempts}..."
-        )
-        if self.websocket_handler and self.websocket_handler.is_connected():
-            print("Already reconnected, stopping timer.")
-            self._reconnect_timer.stop()
-            self._reconnect_attempts = 0
-            return
-        # Try initializing and connecting again
+        """Attempts to reconnect to the WebSocket server."""
+        self._reconnect_attempts += 1
+        
+        # Update UI to show connecting status
+        if self.main_window:
+            self.main_window.set_connection_status(ui.MainWindow.CONNECTION_STATUS_CONNECTING)
+            self.main_window.update_ws_status(f"Reconnecting ({self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS})...")
+            self.main_window.show_status_message("Attempting WebSocket Reconnect...")
+            
+        print(f"Attempting to reconnect (Attempt {self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS})")
+        
+        # Attempt to reconnect
         self.init_websocket()
+        
+        # If we've reached max attempts, stop trying
+        if self._reconnect_attempts >= self.MAX_RECONNECT_ATTEMPTS:
+            print("Max reconnect attempts reached. Giving up.")
+            self._reconnect_timer.stop()
+            
+            # Update UI to show disconnected status
+            if self.main_window:
+                self.main_window.set_connection_status(ui.MainWindow.CONNECTION_STATUS_DISCONNECTED)
+                self.main_window.update_ws_status("Disconnected (Failed)")
+                self.main_window.show_status_message("WebSocket Disconnected. Max reconnect attempts reached.")
 
     # --- New Slot for View Permission ---
     @pyqtSlot(str)
@@ -1309,18 +1332,21 @@ class AppController(
         if self.websocket_handler and self.websocket_handler.is_connected():
             # Send view request message
             message = {
-                "type": "request_view",  # Changed type
+                "type": "request_view",
                 "target_uid": target_uid,
-                "sender_uid": self.username,  # Make sure we include our identity
+                "sender_uid": self.username,
             }
-            self.current_peer_uid = target_uid  # Store target we are trying to view
+            # Don't store current_peer_uid until connection is confirmed
+            # self.current_peer_uid = target_uid 
             self.websocket_handler.send_message(message)
 
             if self.main_window:
+                # Set Peer Status to Connecting (Yellow)
+                self.main_window.set_peer_connection_status(ui.MainWindow.PEER_STATUS_CONNECTING)
                 self._last_status_message = (
                     f"Requesting to view {target_uid}'s screen..."
                 )
-                self.main_window.update_status(self._last_status_message)
+                self.main_window.show_status_message(self._last_status_message)
                 # Disable the request button while waiting for response
                 self.main_window.request_view_button.setEnabled(False)
 
@@ -1399,48 +1425,45 @@ class AppController(
             traceback.print_exc()
 
     def handle_connection_status(self, message):
-        """Process connection status updates from the server"""
+        """Process connection status updates from the server (regarding PEERS)"""
         try:
             status = message.get("status")
             peer_uid = message.get("peer_uid")
             message_text = message.get("message", "")
 
-            print(f"[DEBUG] Connection status: {status} - {message_text}")
+            print(f"[DEBUG] Peer Connection status: {status} - Peer: {peer_uid} - Msg: {message_text}")
 
             if status == "connected_to_peer":
                 self.current_peer_uid = peer_uid
                 if self.main_window:
-                    # Reset FPS counter for new connection
-                    self._reset_fps_counter()  # Use the method instead of duplicating code
-                    self._last_status_message = f"Connected to {peer_uid}"
-                    self.main_window.update_status(self._last_status_message)
-                    self.main_window.set_connected_state(True)
+                    # This call now updates the peer indicator to Green
+                    self.main_window.set_connected_state(peer_uid)
+                    self.main_window.request_view_button.setEnabled(True) # Re-enable button
 
-            elif status == "peer_disconnected":
+            elif status == "peer_disconnected" or status == "disconnect_success":
                 if self.main_window:
-                    self.main_window.update_status("Peer disconnected")
-                    self.main_window.set_connected_state(False)
-
-                    # Disable input when peer disconnects
-                    if (
-                        hasattr(self.main_window, "screen_display_widget")
-                        and self.main_window.screen_display_widget
-                    ):
-                        print("[DEBUG] Disabling mouse input as peer disconnected")
-                        self.main_window.screen_display_widget.view_only = True
-
+                     # This call now updates the peer indicator to Red
+                    self.main_window.set_disconnected_state(f"Peer {peer_uid} disconnected. {message_text}")
+                    self.main_window.request_view_button.setEnabled(True) # Re-enable button
+                if self.current_peer_uid == peer_uid:
                     self.current_peer_uid = None
 
-            elif status == "error":
+            elif status == "error" or status == "connection_failed":
                 if self.main_window:
-                    self.main_window.update_status(f"Connection Error: {message_text}")
-                    self.main_window.set_connected_state(False)
+                    # Update status bar and show message box
+                    self.main_window.show_status_message(f"Peer Connection Error: {message_text}")
                     QMessageBox.warning(
-                        self.main_window, "Connection Error", message_text
+                        self.main_window, "Peer Connection Error", message_text
                     )
+                    # Ensure UI is in disconnected state (indicator turns Red)
+                    self.main_window.set_disconnected_state(f"Peer Connection Failed: {message_text}")
+                    self.main_window.request_view_button.setEnabled(True) # Re-enable button
+                # Clear potential peer uid if connection failed
+                if self.current_peer_uid == peer_uid:
+                     self.current_peer_uid = None
 
         except Exception as e:
-            print(f"[ERROR] Error handling connection status: {str(e)}")
+            print(f"[ERROR] Error handling peer connection status: {str(e)}")
             traceback.print_exc()
 
     def handle_login_response(self, message):
@@ -1453,13 +1476,13 @@ class AppController(
                 print(f"[DEBUG] Login successful: {message_text}")
                 self.is_logged_in = True
                 if self.main_window:
-                    self.main_window.update_status("Logged in successfully")
+                    self.main_window.show_status_message("Logged in successfully", 3000)
                     self.main_window.set_logged_in_state(True)
             else:
                 print(f"[ERROR] Login failed: {message_text}")
                 self.is_logged_in = False
                 if self.main_window:
-                    self.main_window.update_status(f"Login failed: {message_text}")
+                    self.main_window.show_status_message(f"Login failed: {message_text}")
                     self.main_window.set_logged_in_state(False)
 
         except Exception as e:
@@ -1471,7 +1494,7 @@ class AppController(
         print("[DEBUG] Starting screen sharing after permission granted")
         if self.main_window:
             # Update UI state
-            self.main_window.update_status("Screen sharing started")
+            self.main_window.show_status_message("Screen sharing started")
             self.main_window.start_sharing_button.setEnabled(False)
             self.main_window.stop_sharing_button.setEnabled(True)
 

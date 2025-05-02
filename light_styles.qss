@@ -471,4 +471,103 @@ LoginWindow QLabel#error_label {
     color: #F44336; /* Red for light theme */
     font-size: 9pt;
     padding-top: 10px;
+}
+
+/* === Toolbar === */
+QToolBar#main_toolbar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #d0d0d0;
+    padding: 2px 5px; /* Add vertical padding */
+    spacing: 6px; /* Adjust spacing */
+}
+
+/* Labels in Toolbar - Apply Button-like Styling */
+QToolBar#main_toolbar QLabel {
+    background-color: #f0f0f0; /* Background like disabled button */
+    color: #444; 
+    padding: 4px 8px;
+    margin: 0px 1px;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    min-height: 18px;
+}
+
+/* Specific Toolbar Labels - Status Text (Bold) */
+QLabel#peer_status_text_label {
+    font-weight: bold; 
+}
+
+/* Specific Toolbar Labels - Peer Username (Bold) */
+QLabel#peer_username_label {
+    font-weight: bold;
+    color: #111;
+}
+
+/* Specific Toolbar Labels - Role (Italic) */
+QLabel#role_label {
+    font-style: italic;
+}
+
+/* Specific Toolbar Labels - Session Timer (Dimmer) */
+QLabel#session_timer_label {
+    color: #777;
+}
+
+/* Status Indicator (The Circle) - Keep it simple */
+QLabel#peer_status_indicator {
+    background-color: #F44336; /* Default Red */
+    border: 1px solid #d0d0d0;
+    border-radius: 7px; 
+    min-width: 14px;
+    max-width: 14px;
+    min-height: 14px;
+    max-height: 14px;
+    padding: 0px;
+    margin: 0px 2px 0px 0px;
+}
+
+/* Quick Action Buttons Styling (Already defined) */
+/* QPushButton#quick_share_button { ... } */
+/* QPushButton#quick_stop_button { ... } */
+/* QPushButton#quick_disconnect_button { ... } */
+
+/* Right-side Flat Icon Buttons */
+QToolBar#main_toolbar QPushButton#log_button,
+QToolBar#main_toolbar QPushButton#screenshot_button,
+QToolBar#main_toolbar QPushButton#recorder_button,
+QToolBar#main_toolbar QPushButton#fullscreen_button,
+QToolBar#main_toolbar QPushButton#theme_button,
+QToolBar#main_toolbar QPushButton#toolbar_logout_button {
+    background-color: transparent;
+    border: none;
+    padding: 5px;
+    margin: 0px 1px;
+    border-radius: 4px; 
+    min-width: 28px;
+    min-height: 28px;
+    color: #444; /* Icon color */
+}
+
+/* Log button specific font size if emoji is too small */
+QPushButton#log_button { 
+    font-size: 14pt; 
+}
+
+/* Hover/Press for Flat Icon Buttons */
+QToolBar#main_toolbar QPushButton#log_button:hover,
+QToolBar#main_toolbar QPushButton#screenshot_button:hover,
+QToolBar#main_toolbar QPushButton#recorder_button:hover,
+QToolBar#main_toolbar QPushButton#fullscreen_button:hover,
+QToolBar#main_toolbar QPushButton#theme_button:hover,
+QToolBar#main_toolbar QPushButton#toolbar_logout_button:hover {
+    background-color: #d8d8d8; 
+}
+
+QToolBar#main_toolbar QPushButton#log_button:pressed,
+QToolBar#main_toolbar QPushButton#screenshot_button:pressed,
+QToolBar#main_toolbar QPushButton#recorder_button:pressed,
+QToolBar#main_toolbar QPushButton#fullscreen_button:pressed,
+QToolBar#main_toolbar QPushButton#theme_button:pressed,
+QToolBar#main_toolbar QPushButton#toolbar_logout_button:pressed {
+    background-color: #c8c8c8; 
 } 
