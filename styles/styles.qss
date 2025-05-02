@@ -372,6 +372,7 @@ LoginWindow QLabel#title_label1 {
      font-size: 14pt;
      font-weight: bold;
      padding-bottom: 0px;
+     color: #ffffff;
 }
 LoginWindow QLabel#title_label2 {
      font-size: 10pt;
@@ -383,15 +384,56 @@ LoginWindow QLabel#title_label2 {
 /* Input fields in LoginWindow */
 LoginWindow QLineEdit {
      font-size: 11pt;
-     padding: 6px;
+     padding: 8px;
      border-radius: 5px;
      margin-bottom: 5px; /* Space below input fields */
+     background-color: #283550;
+     border: 1px solid #455b82;
+     min-height: 30px; /* Taller input fields */
 }
 
 /* Remember Me checkbox in LoginWindow */
 LoginWindow QCheckBox {
      padding-top: 5px;
      font-size: 9pt;
+     color: #cccccc;
+}
+
+/* Login and Register buttons in LoginWindow */
+LoginWindow QPushButton#login_button {
+    background-color: #3a6fbf;
+    color: white;
+    font-weight: bold;
+    min-height: 40px;
+    border: none;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+LoginWindow QPushButton#login_button:hover {
+    background-color: #4a7fd0;
+}
+
+LoginWindow QPushButton#register_button {
+    background-color: #446a1f;
+    color: white;
+    min-height: 40px;
+    border: none;
+    border-radius: 5px;
+}
+
+LoginWindow QPushButton#register_button:hover {
+    background-color: #548a2f;
+}
+
+/* Error label in LoginWindow */
+LoginWindow QLabel#error_label {
+    color: #ff6b6b;
+    font-size: 9pt;
+    background-color: #2a2a42;
+    padding: 8px;
+    border-radius: 5px;
+    margin-top: 10px;
 }
 
 /* === Toolbar === */

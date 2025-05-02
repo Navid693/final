@@ -1,37 +1,56 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer, pyqtSlot
-from PyQt5.QtGui import QPixmap , QIcon , QPaintEvent , QKeyEvent, QMouseEvent, QWheelEvent, QPaintEvent
-import base64
-import threading
+import os
 import time
-import traceback
 import json
-from PIL import Image
-import io
-import httpx # Keep httpx import for future API calls
+import logging
+import asyncio
+import websockets
+import threading
+import base64
+import cv2
+import numpy as np
+import traceback
+import httpx
+from PyQt5.QtWidgets import QApplication, QMessageBox, QVBoxLayout, QFormLayout
+from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal, pyqtSlot, QObject
+from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QMouseEvent, QWheelEvent, QPaintEvent
+import ui
+from remote_controller import RemoteController
+from constants import (
+    DEFAULT_BACKEND_URL, DEFAULT_WS_URL, MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS,
+    DEFAULT_STREAM_QUALITY, DEFAULT_STREAM_SCALE, DEFAULT_STREAM_FPS, DEFAULT_MONITOR_INDEX,
+    DEFAULT_THEME, AVAILABLE_THEMES, INITIAL_STATUS, CONNECTION_STATUS,
+    WS_MESSAGE_TYPES, STYLES_DIR, ICONS_DIR, LOG_FILE,
+    LOG_FORMAT, LOG_DATE_FORMAT, LOG_LEVEL
+)
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format=LOG_FORMAT,
+    datefmt=LOG_DATE_FORMAT
+)
 
 # Import local modules
 import utils
 import ui
 # Removed unused server/client imports
 from websocket_handler import WebSocketHandler # Import WebSocketHandler
-from remote_controller import RemoteController # Import the RemoteController class
 
 # --- Function to load stylesheet ---
 def load_stylesheet(theme_name="dark"):
     """Loads and returns the content of a QSS file based on theme name."""
     base_filename = f"{theme_name}_styles.qss" if theme_name == "light" else "styles.qss"
     filename = f"styles/{base_filename}" # Prepend the directory
-    print(f"[DEBUG] Attempting to load stylesheet: {filename}")
+    logging.debug(f"[DEBUG] Attempting to load stylesheet: {filename}")
     try:
         with open(filename, "r") as f:
             return f.read()
     except FileNotFoundError:
-        print(f"[WARNING] Stylesheet file '{filename}' not found.")
+        logging.warning(f"Stylesheet file '{filename}' not found.")
         return "" # Return empty string if file not found
     except Exception as e:
-        print(f"[ERROR] Failed to load stylesheet '{filename}': {e}")
+        logging.error(f"Failed to load stylesheet '{filename}': {e}")
         return ""
 
 class AppController(QObject):
@@ -42,82 +61,80 @@ class AppController(QObject):
     # Add signals related to view request
     request_view_permission_signal = pyqtSignal(str) # Ask user if peer can view
 
-    RECONNECT_DELAY_MS = 5000 # Delay between reconnect attempts (5 seconds)
-    MAX_RECONNECT_ATTEMPTS = 5 # Max number of attempts
+    RECONNECT_DELAY_MS = RECONNECT_DELAY_MS
+    MAX_RECONNECT_ATTEMPTS = MAX_RECONNECT_ATTEMPTS
 
     def __init__(self):
-        super().__init__() # Initialize the QObject base class
+        super().__init__()  # Initialize QObject
         self.app = QApplication(sys.argv)
-        self.current_theme = "dark" # Start with dark theme
-
-        # --- Backend Interaction State ---
+        self.current_theme = DEFAULT_THEME
+        self._apply_theme()
+        
         self.login_window = None
+        self.registration_window = None
         self.main_window = None
-        # self.api_client = None # Placeholder if more complex HTTP calls are needed
-        self.websocket_handler = None # Handles WS communication
-        self.jwt_token = None # Stores the authentication token after login
-        self.backend_base_url = None # Set from LoginWindow (e.g., "http://127.0.0.1:8000")
-        self.username = None # Store username after login
-        self.current_peer_uid = None # Store UID of the peer we are connected to
-        self.control_permissions = {} # Store permission status: {peer_uid: bool (True if peer_uid can control us)}
-
-        # --- Screen Sharing State ---
-        self._is_sharing_screen = False # Are *we* currently sharing?
-        self.remote_controller = None # Initialized after websocket is ready, handles screen capture/input sim
-
-        # Apply initial theme
-        self.apply_theme()
-
-        # --- Default Stream Settings (used when starting sharing) ---
-        # TODO (Backend Consideration): Backend might need to know *some* of these if enforcing limits,
-        # but primarily these affect client-side capture/encoding before sending.
-        self._stream_quality = ui.MainWindow.DEFAULT_QUALITY
-        self._stream_scale_factor = ui.MainWindow.DEFAULT_SCALE / 100.0
-        self._stream_fps = ui.MainWindow.DEFAULT_FPS
-        self._stream_monitor_index = ui.MainWindow.DEFAULT_MONITOR_INDEX
-
-        # --- Viewing State ---
-        self._received_frame_counter = 0 # For FPS calculation when viewing
+        self.websocket_handler = None
+        self.jwt_token = None
+        self.backend_base_url = None
+        self.username = None
+        self.current_peer_uid = None
+        self.control_permissions = {}
+        
+        self._is_sharing_screen = False
+        self.remote_controller = None
+        
+        # Stream settings with defaults from constants
+        self._stream_quality = DEFAULT_STREAM_QUALITY
+        self._stream_scale_factor = DEFAULT_STREAM_SCALE / 100.0
+        self._stream_fps = DEFAULT_STREAM_FPS
+        self._stream_monitor_index = DEFAULT_MONITOR_INDEX
+        
+        # FPS calculation
+        self._received_frame_counter = 0
         self._fps_calc_start_time = time.perf_counter()
-        self._last_status_message = "Initializing..." # Store last base status
-
-        # --- Auto-Reconnect State ---
+        self._last_status_message = INITIAL_STATUS
+        
+        # Reconnection settings
         self._reconnect_attempts = 0
         self._reconnect_timer = QTimer()
         self._reconnect_timer.timeout.connect(self._attempt_reconnect)
+        
+        # Track pending permission requests
+        self._permission_requests_pending = set()
 
         # Connect signals that are always relevant
         self.request_permission_signal.connect(self.show_permission_dialog_slot)
         self.fps_updated_signal.connect(self._handle_fps_update_to_ui)
         self.request_view_permission_signal.connect(self._ask_view_permission_slot)
 
-        self._permission_requests_pending = set() # Track pending input control requests {peer_uid}
-
         # Start with login window
         self.show_login_window()
 
-    def apply_theme(self):
+    def _apply_theme(self):
         """Loads and applies the stylesheet for the current theme."""
         stylesheet = load_stylesheet(self.current_theme)
         if stylesheet:
             self.app.setStyleSheet(stylesheet)
-            print(f"[DEBUG] Applied {self.current_theme} theme stylesheet.")
+            logging.debug(f"Applied {self.current_theme} theme stylesheet.")
         else:
             self.app.setStyleSheet("") # Clear stylesheet if loading fails
-            print(f"[WARNING] Failed to load {self.current_theme} stylesheet, cleared styles.")
+            logging.warning(f"Failed to load {self.current_theme} stylesheet, cleared styles.")
 
         # Update UI elements that need explicit theme changes
-        if self.login_window:
-            self.login_window._update_theme_icon(self.current_theme)
-        if self.main_window:
-             self.main_window._update_theme_icon(self.current_theme)
+        try:
+            if self.login_window:
+                self.login_window._update_theme_icon(self.current_theme)
+            if self.main_window:
+                self.main_window._update_theme_icon(self.current_theme)
+        except AttributeError:
+            pass  # Ignore if windows haven't been created yet
 
     @pyqtSlot()
     def toggle_theme(self):
         """Switches between light and dark themes and reapplies styles."""
-        print("[DEBUG] Toggling theme...")
+        logging.debug("Toggling theme...")
         self.current_theme = "light" if self.current_theme == "dark" else "dark"
-        self.apply_theme() # Reload and apply the new stylesheet
+        self._apply_theme() # Reload and apply the new stylesheet
 
     def show_login_window(self):
         """Displays the login window."""
@@ -125,81 +142,108 @@ class AppController(QObject):
             self.login_window = ui.LoginWindow()
             self.login_window.login_attempt_signal.connect(self.handle_login_attempt)
             self.login_window.toggle_theme_signal.connect(self.toggle_theme)
-            # TODO (Backend): Connect register_signal if/when registration UI is added.
-            # Backend needs a separate registration endpoint (e.g., POST /api/register).
-            # self.login_window.register_signal.connect(self.handle_registration_request)
-        self.login_window._update_theme_icon(self.current_theme) # Ensure icon is correct
+            self.login_window.register_signal.connect(self.show_registration_window)
+        else:
+            # Reset login button state if window already exists
+            self.login_window.login_button.setEnabled(True)
+            self.login_window.login_button.setText("Login")
+            self.login_window.register_button.setEnabled(True)
+            self.login_window.error_label.hide()
+            
+        self.login_window._update_theme_icon(self.current_theme)
         self.login_window.show()
 
-    @pyqtSlot(str, str, str)
-    def handle_login_attempt(self, backend_url, username, password):
-        """Handles the login attempt signal from LoginWindow."""
-        print(f"Attempting login to {backend_url} for user {username}")
-        self.backend_base_url = backend_url # Store the base URL for API and WS
-        self.username = username # Store username for WS registration
-        self.login_window.set_logging_in() # Update UI
+    def show_registration_window(self, backend_url):
+        """Shows the registration window."""
+        if self.registration_window is None:
+            self.registration_window = ui.RegistrationWindow(backend_url, self.current_theme)
+            self.registration_window.register_attempt_signal.connect(self.handle_registration_attempt)
+            self.registration_window.toggle_theme_signal.connect(self.toggle_theme)
+        self.registration_window._update_theme_icon(self.current_theme)
+        self.registration_window.show()
 
-        # --- TODO (Backend): Implement Actual HTTP Login --- 
-        # 1. Define the exact endpoint (e.g., /api/login).
-        # 2. Define the HTTP method (likely POST).
-        # 3. Define the request body format (e.g., JSON: {"username": "user", "password": "pass"}).
-        # 4. Define the expected success response format (e.g., JSON: {"success": true, "token": "jwt_token"}).
-        # 5. Define the expected failure response format (e.g., JSON: {"success": false, "message": "Error reason"}).
-        # 6. Replace the simulation block below with an actual `httpx` call.
-        # -----------------------------------------------------
+    @pyqtSlot(str, str, str, str)
+    def handle_registration_attempt(self, backend_url, username, password, confirm_password):
+        """Handles the registration attempt signal from RegistrationWindow."""
+        logging.info(f"Attempting registration to {backend_url} for user {username}")
+        self.backend_base_url = backend_url
+        self.registration_window.set_registering()
 
-        # <<<<< START: SIMULATED LOGIN - REPLACE WITH ACTUAL API CALL >>>>>
         try:
-            # --- Example using httpx (replace with actual logic) ---
-            # async with httpx.AsyncClient() as client:
-            #     login_endpoint = f"{self.backend_base_url.rstrip('/')}/api/login" # Ensure clean URL
-            #     print(f"[DEBUG] Sending login request to: {login_endpoint}")
-            #     response = await client.post(login_endpoint, json={"username": username, "password": password}, timeout=10.0)
-            #     print(f"[DEBUG] Login response status: {response.status_code}")
-            #     response.raise_for_status() # Raise exception for 4xx/5xx status
-            #     data = response.json()
-            #     print(f"[DEBUG] Login response data: {data}")
-            #     if data.get("success") and data.get("token"):
-            #         self.jwt_token = data["token"]
-            #         print("Login successful!")
-            #         self.on_login_success()
-            #     else:
-            #         error_msg = data.get("message", "Login failed from server.")
-            #         print(f"Login failed: {error_msg}")
-            #         self.login_window.show_error(error_msg)
+            # --- TODO (Backend): Implement Actual HTTP Registration ---
+            # 1. Define the exact endpoint (e.g., /api/register).
+            # 2. Define the HTTP method (POST).
+            # 3. Define the request body format (e.g., JSON: {"username": "user", "password": "pass"}).
+            # 4. Define the expected success response format.
+            # 5. Define the expected failure response format.
+            # 6. Replace the simulation block below with an actual `httpx` call.
+            # -----------------------------------------------------
 
-            # --- Temporary Simulation --- (REMOVE THIS BLOCK)
+            # <<<<< START: SIMULATED REGISTRATION - REPLACE WITH ACTUAL API CALL >>>>>
             import time
             time.sleep(1) # Simulate network delay
-            print("Login successful (Simulated)!")
-            self.jwt_token = "fake_jwt_token_for_testing" # Use fake token
-            # TODO (Backend): The backend should generate a real token (e.g., JWT)
-            # This token might be needed for subsequent WS connection or messages.
-            self.on_login_success()
-            # --- End Temporary Simulation --- 
+            logging.info("Registration successful (Simulated)!")
+            
+            # Show success message and close registration window
+            QMessageBox.information(self.registration_window, "Registration Successful", 
+                                  "Account created successfully. You can now login.")
+            self.registration_window.close()
+            self.registration_window = None
+            
+            # Update login window with the new username
+            if self.login_window:
+                self.login_window.username_input.setText(username)
+                self.login_window.password_input.clear()
+                self.login_window.username_input.setFocus()
+            # <<<<< END: SIMULATED REGISTRATION - REPLACE WITH ACTUAL API CALL >>>>>
 
         except httpx.RequestError as e:
-            # Handle network errors (cannot reach server, DNS issues, etc.)
-            error_msg = f"Network error connecting to {self.backend_base_url}: {e}"
-            print(f"Login network error: {error_msg}")
-            self.login_window.show_error(error_msg)
+            error_msg = f"Network error connecting to {backend_url}: {e}"
+            logging.error(f"Registration network error: {error_msg}")
+            self.registration_window.show_error(error_msg)
         except httpx.HTTPStatusError as e:
-            # Handle HTTP errors (4xx client errors, 5xx server errors)
             try:
-                # Try to parse error message from response body
                 error_data = e.response.json()
                 error_msg = error_data.get("message", f"HTTP Error: {e.response.status_code}")
             except:
                 error_msg = f"HTTP Error: {e.response.status_code}"
-            print(f"Login HTTP error: {error_msg}")
-            self.login_window.show_error(error_msg)
+            logging.error(f"Registration HTTP error: {error_msg}")
+            self.registration_window.show_error(error_msg)
         except Exception as e:
-            # Handle other potential errors (JSON decoding, etc.)
+            error_msg = f"An unexpected error occurred during registration: {e}"
+            logging.exception(error_msg)
+            self.registration_window.show_error(error_msg)
+
+    @pyqtSlot(str, str, str)
+    def handle_login_attempt(self, backend_url, username, password):
+        """Handles the login attempt signal from LoginWindow."""
+        logging.info(f"Attempting login to {backend_url} for user {username}")
+        self.backend_base_url = backend_url
+        self.login_window.set_logging_in()
+
+        try:
+            # --- TEMPORARY BYPASS: Auto-login for testing ---
+            # This will be replaced with actual authentication when backend is ready
+            self.jwt_token = "test_token" # Temporary token for testing
+            self.username = username
+            logging.info("Login successful (Temporary Bypass)!")
+            
+            # Close and clean up login window
+            if self.login_window:
+                self.login_window.close()
+                self.login_window = None
+            
+            # Initialize WebSocket connection
+            self._initialize_websocket()
+            
+            # Show main window
+            self.show_main_window()
+            # --- END TEMPORARY BYPASS ---
+
+        except Exception as e:
             error_msg = f"An unexpected error occurred during login: {e}"
-            print(f"Login error: {error_msg}")
-            traceback.print_exc()
+            logging.exception(error_msg)
             self.login_window.show_error(error_msg)
-        # <<<<< END: SIMULATED LOGIN - REPLACE WITH ACTUAL API CALL >>>>>
 
     def on_login_success(self):
         """Called after successful login and JWT token is obtained."""
@@ -207,18 +251,18 @@ class AppController(QObject):
             self.login_window.close()
         self.login_window = None
 
-        print(f"Proceeding to main app for user {self.username} with token: {self.jwt_token}")
+        logging.info(f"Proceeding to main app for user {self.username} with token: {self.jwt_token}")
         self.show_main_window()
         self.init_websocket() # Initialize WebSocket AFTER showing main window
 
     def show_main_window(self):
         """Creates and shows the main application window."""
         if self.main_window is None:
-            print("[DEBUG] Creating MainWindow...")
+            logging.debug("Creating MainWindow...")
             self.main_window = ui.MainWindow(self.username, self.current_theme)
 
             # --- Connect signals FROM MainWindow UI Actions TO Controller Logic ---
-            print("[DEBUG] Connecting MainWindow signals...")
+            logging.debug("Connecting MainWindow signals...")
             self.main_window.request_view_signal.connect(self.handle_request_view)
             self.main_window.disconnect_signal.connect(self.handle_disconnect)
             self.main_window.send_chat_message_signal.connect(self.handle_send_chat)
@@ -238,39 +282,83 @@ class AppController(QObject):
             if hasattr(self.main_window, "screen_display_widget") and self.main_window.screen_display_widget:
                 self.main_window.screen_display_widget.mouse_event_signal.connect(self.handle_send_input_event)
                 self.main_window.screen_display_widget.key_event_signal.connect(self.handle_send_input_event)
-                print("[DEBUG]  - screen_display_widget signals connected.")
+                logging.debug("Screen display widget signals connected.")
             else:
-                 print("[WARN] screen_display_widget not found on main_window during signal connection.")
+                 logging.warning("screen_display_widget not found on main_window during signal connection.")
 
-            print("[DEBUG] MainWindow signals connected.")
+            logging.debug("MainWindow signals connected.")
             self.main_window.show()
-            print("[DEBUG] MainWindow shown.")
+            logging.debug("MainWindow shown.")
 
         # Ensure screen display starts in view-only mode
         if (
             hasattr(self.main_window, "screen_display_widget")
             and self.main_window.screen_display_widget
         ):
-            print("[DEBUG] Setting screen display widget to view-only mode initially.")
+            logging.debug("Setting screen display widget to view-only mode initially.")
             self.main_window.screen_display_widget.set_view_only(True)
 
+
+    def _initialize_websocket(self):
+        """Initializes the WebSocket connection with the backend."""
+        if self.websocket_handler is not None:
+            self.websocket_handler.close()
+            self.websocket_handler = None
+
+        try:
+            # Create WebSocket handler
+            self.websocket_handler = WebSocketHandler(self.backend_base_url, self.username)
+            
+            # Connect signals FROM WebSocketHandler TO Controller Logic
+            self.websocket_handler.connected_signal.connect(self.on_websocket_connected)
+            self.websocket_handler.disconnected_signal.connect(self.on_websocket_disconnected)
+            self.websocket_handler.error_signal.connect(self.on_websocket_error)
+            # Specific message type signals (Backend needs to send these types)
+            self.websocket_handler.user_registered_signal.connect(self._on_user_registered)
+            self.websocket_handler.users_list_updated_signal.connect(self._on_users_list_updated)
+            self.websocket_handler.peer_connection_requested_signal.connect(self._on_peer_connection_requested)
+            self.websocket_handler.peer_connected_signal.connect(self._on_peer_connected)
+            self.websocket_handler.peer_disconnected_signal.connect(self._on_peer_disconnected)
+            self.websocket_handler.chat_message_received_signal.connect(self._on_chat_message_received)
+            # Generic message handler for other JSON types
+            self.websocket_handler.message_received_signal.connect(self.handle_websocket_message)
+            # Binary message handler (screen frames + cursor)
+            self.websocket_handler.binary_message_received_signal.connect(self.handle_websocket_binary_message)
+
+            # Initialize RemoteController *after* websocket_handler is created
+            if not self.remote_controller:
+                self.remote_controller = RemoteController(self.websocket_handler)
+                # Connect RemoteController signals TO Controller/UI
+                self.remote_controller.screen_captured_signal.connect(self._on_screen_captured)
+                self.remote_controller.screen_share_status_signal.connect(self._on_screen_share_status_changed)
+                self.remote_controller.error_signal.connect(self._on_remote_controller_error)
+
+            # Attempt WebSocket connection
+            self.websocket_handler.connect_ws()
+
+        except Exception as e:
+            error_msg = f"Failed to initialize WebSocket connection: {e}"
+            logging.exception(error_msg)
+            self.login_window.show_error(error_msg)
+            self.jwt_token = None
+            self.username = None
 
     def init_websocket(self):
         """Initializes and attempts to connect the WebSocket handler."""
         if not self.backend_base_url:
-            print("Cannot initialize WebSocket: Missing Backend URL.")
+            logging.error("Cannot initialize WebSocket: Missing Backend URL.")
             # TODO (Client): Show user-facing error if main_window exists?
             return
 
         if self.websocket_handler and self.websocket_handler.is_connected:
-            print("WebSocket already connected.")
+            logging.info("WebSocket already connected.")
             if self._reconnect_timer.isActive():
-                print("Stopping reconnect timer as connection established.")
+                logging.info("Stopping reconnect timer as connection established.")
                 self._reconnect_timer.stop()
             self._reconnect_attempts = 0 # Reset attempts on successful manual init
             return
 
-        print(f"Initializing WebSocket Handler (Attempt: {self._reconnect_attempts + 1})...")
+        logging.info(f"Initializing WebSocket Handler (Attempt: {self._reconnect_attempts + 1})...")
         if self._reconnect_attempts == 0 and self._reconnect_timer.isActive():
             self._reconnect_timer.stop()
 
@@ -315,9 +403,9 @@ class AppController(QObject):
     @pyqtSlot()
     def on_websocket_connected(self):
         """Called when WebSocket connection is established and handler sends `connected_signal`."""
-        print("WebSocket connected successfully!")
+        logging.info("WebSocket connected successfully!")
         if self._reconnect_timer.isActive():
-            print("Stopping reconnect timer as connection established.")
+            logging.info("Stopping reconnect timer as connection established.")
             self._reconnect_timer.stop()
         self._reconnect_attempts = 0
 
@@ -331,7 +419,7 @@ class AppController(QObject):
     @pyqtSlot(str)
     def on_websocket_disconnected(self, reason):
         """Called when WebSocket connection is lost and handler sends `disconnected_signal`."""
-        print(f"WebSocket disconnected: {reason}")
+        logging.info(f"WebSocket disconnected: {reason}")
 
         # Clean up peer connection state if WS disconnects
         if self.current_peer_uid:
@@ -340,7 +428,7 @@ class AppController(QObject):
         # Attempt auto-reconnect
         if (not self._reconnect_timer.isActive() and
             self._reconnect_attempts < self.MAX_RECONNECT_ATTEMPTS):
-            print(f"Starting reconnect timer. Attempt {self._reconnect_attempts + 1}/{self.MAX_RECONNECT_ATTEMPTS}")
+            logging.info(f"Starting reconnect timer. Attempt {self._reconnect_attempts + 1}/{self.MAX_RECONNECT_ATTEMPTS}")
             self._reconnect_timer.start(self.RECONNECT_DELAY_MS)
             if self.main_window:
                 self.main_window.show_status_message(f"WebSocket Disconnected: {reason}. Retrying...")
@@ -355,7 +443,7 @@ class AppController(QObject):
     @pyqtSlot(str)
     def on_websocket_error(self, error_message):
         """Called when a WebSocket error occurs and handler sends `error_signal`."""
-        print(f"WebSocket error: {error_message}")
+        logging.error(f"WebSocket error: {error_message}")
         if self.main_window:
              self.main_window.show_status_message(f"WebSocket Error: {error_message}")
              # TODO (Client/Backend): Decide if UI should enter disconnected state on certain errors.
@@ -368,15 +456,13 @@ class AppController(QObject):
         try:
             message_type = message.get("type")
             sender_uid = message.get("sender_uid") # Expected sender from backend/peer
-            print(f"[DEBUG Client {self.username}] Received generic WS message: Type={message_type}, Sender={sender_uid}")
+            logging.debug(f"Received generic WS message: Type={message_type}, Sender={sender_uid}")
 
             # --- Handle Input Permission Updates (Peer telling us if we can control them) ---
-            # TODO (Backend): Backend receives this from the user *granting* permission via show_permission_dialog_slot,
-            # stores the permission state, and relays this message to the user *requesting* control.
             if message_type == "input_permission_update":
                 allowed = message.get("allowed", False)
                 if sender_uid and sender_uid == self.current_peer_uid:
-                    print(f"[DEBUG] Received input permission update from {sender_uid}: {allowed}")
+                    logging.debug(f"Received input permission update from {sender_uid}: {allowed}")
                     # NOTE: We are VIEWING here. `allowed` means WE are allowed to control the PEER.
                     # We update our ScreenDisplayWidget view_only state.
                     if self.main_window and self.main_window.screen_display_widget:
@@ -385,20 +471,18 @@ class AppController(QObject):
                          self.main_window.screen_display_widget.set_view_only(not allowed)
                          # Also update the status bar display
                          self.main_window.update_control_status_display()
-                         print(f"[DEBUG] Set screen display view_only to: {not allowed}")
+                         logging.debug(f"Set screen display view_only to: {not allowed}")
                 else:
-                    print(f"[WARN] Received input_permission_update from unexpected sender {sender_uid} or no peer connected.")
+                    logging.warning(f"Received input_permission_update from unexpected sender {sender_uid} or no peer connected.")
 
             # --- Handle View Responses (Peer responding to our view request) ---
-            # TODO (Backend): Backend receives `accept_connection`/`reject_connection` from target user
-            # and relays it to the original requester as this `view_response` message.
             elif message_type == "view_response":
                 allowed = message.get("allowed", False)
                 response_sender = message.get("sender_uid") # The user who allowed/denied
                 target_requester = message.get("target_uid") # Should be self.username
 
                 if target_requester != self.username:
-                     print(f"[WARN] Received view_response intended for {target_requester}")
+                     logging.warning(f"Received view_response intended for {target_requester}")
                      return # Ignore responses not meant for us
 
                 # Re-enable the request button now that we have a response
@@ -407,7 +491,7 @@ class AppController(QObject):
 
                 if allowed and response_sender:
                     # Successfully connected FOR VIEWING
-                    print(f"[DEBUG] View request accepted by {response_sender}")
+                    logging.debug(f"View request accepted by {response_sender}")
                     self.current_peer_uid = response_sender
                     self.control_permissions.clear() # Clear old permissions
                     if self.main_window:
@@ -423,16 +507,15 @@ class AppController(QObject):
                 else:
                     # View request was denied by the peer
                     denial_message = message.get("message", f"User '{response_sender}' denied your view request.")
-                    print(f"[DEBUG] View request denied by {response_sender}")
+                    logging.debug(f"View request denied by {response_sender}")
                     if self.main_window:
                         self.main_window.set_disconnected_state(denial_message) # Show reason in status
                         QMessageBox.information(self.main_window,"View Request Denied", denial_message)
 
             # --- Handle generic error messages from Backend ---
-            # TODO (Backend): Send this type of message for operational errors.
             elif message_type == "error":
                 error_message = message.get("message", "Unknown error from peer/server")
-                print(f"[ERROR] Received error message: {error_message}")
+                logging.error(f"Received error message from backend/peer: {error_message}")
                 if self.main_window:
                     self.main_window.show_status_message(f"Error: {error_message}")
                     QMessageBox.warning(self.main_window, "Error", error_message)
@@ -448,10 +531,10 @@ class AppController(QObject):
             #     # Update UI display elements if needed (e.g., status bar)
 
             else:
-                print(f"[WARNING] Unhandled generic message type: {message_type}")
+                logging.warning(f"Unhandled generic message type: {message_type}")
 
         except Exception as e:
-            print(f"[ERROR] Error handling generic WebSocket message: {e}")
+            logging.exception(f"Error handling generic WebSocket message: {e}")
             traceback.print_exc()
 
     @pyqtSlot(bytes)
@@ -461,7 +544,7 @@ class AppController(QObject):
         # This method is called when such a relayed event is received.
         # Note: Backend should have already checked permission before relaying.
         if not data_bytes or len(data_bytes) <= 8: # Expect image data + 4 bytes X + 4 bytes Y
-            print("[WARN] Received empty or too short binary message.")
+            logging.warning("Received empty or too short binary message.")
             return
 
         # Check if the main window and display widget are ready
@@ -470,12 +553,12 @@ class AppController(QObject):
             and hasattr(self.main_window, "screen_display_widget")
             and self.main_window.screen_display_widget
         ):
-            print("[WARN] MainWindow not ready to display received binary frame.")
+            logging.warning("MainWindow not ready to display received binary frame.")
             return
 
         # If we are receiving frames, our role is VIEWING
         if self.main_window._current_role != ui.MainWindow.ROLE_VIEWING:
-            print("[DEBUG] Received first frame, setting role to VIEWING")
+            logging.debug("Received first frame, setting role to VIEWING")
             self.main_window.set_viewing_state(True) # Update UI state
             # Control status display is updated within set_viewing_state
 
@@ -494,7 +577,7 @@ class AppController(QObject):
             self.main_window.screen_display_widget.update_remote_cursor(cursor_x, cursor_y)
 
         except Exception as e:
-            print(f"Error processing received binary frame data: {e}")
+            logging.error(f"Error processing received binary frame data: {e}")
             # traceback.print_exc() # Optional detailed trace
 
         # --- Calculate and emit FPS periodically ---
@@ -512,8 +595,7 @@ class AppController(QObject):
     @pyqtSlot(bool, str)
     def _on_user_registered(self, success, message):
         """Handles `user_registered_signal` after WS sends register message."""
-        # TODO (Backend): Backend sends `register_response` after receiving `register` message.
-        print(f"User registration response: {success}, Message: {message}")
+        logging.info(f"User registration response: Success={success}, Message='{message}'")
         if self.main_window:
             self.main_window.show_status_message(message)
         if not success:
@@ -525,7 +607,7 @@ class AppController(QObject):
     def _on_users_list_updated(self, users):
         """Handles `users_list_updated_signal`."""
         # TODO (Backend): Backend should send `users_list` message (e.g., on user connect/disconnect).
-        print(f"Users list updated: {users}")
+        logging.info(f"Users list updated: {users}")
         # TODO (Client): Implement user list display in MainWindow and update it here.
         # if self.main_window:
         #     self.main_window.update_users_list(users)
@@ -536,7 +618,7 @@ class AppController(QObject):
         """Handles `peer_connection_requested_signal`. A peer wants to view US."""
         # TODO (Backend): Backend receives `request_connection` from User A to User B,
         # relays it as `connection_request` to User B.
-        print(f"Connection request received from: {requesting_username}")
+        logging.info(f"Connection request received from: {requesting_username}")
         # Ask user for permission (using signal to ensure it runs in UI thread)
         self.request_view_permission_signal.emit(requesting_username)
 
@@ -546,7 +628,7 @@ class AppController(QObject):
         """Handles `peer_connected_signal`. WebSocketHandler confirms connection."""
         # TODO (Backend): This signal is triggered by WebSocketHandler upon receiving
         # an *accepted* `connection_response` message from the backend.
-        print(f"Controller notified: Connected to peer: {username}")
+        logging.info(f"Controller notified: Connected to peer: {username}")
         # This might be redundant if view_response/acceptance handlers update UI,
         # but serves as confirmation.
         if not self.current_peer_uid: # Only update if not already set
@@ -563,14 +645,14 @@ class AppController(QObject):
         # 1. A user sends `disconnect_peer`.
         # 2. A user's WebSocket disconnects abruptly while peered.
         # 3. A connection request is rejected (handled slightly differently by client logic).
-        print(f"Controller notified: Disconnected from peer: {username}, Reason: {reason}")
+        logging.info(f"Controller notified: Disconnected from peer: {username}, Reason: {reason}")
         if self.current_peer_uid == username:
             # Call local disconnect handler to clean up state and UI
             self.handle_disconnect(inform_peer=False) # Clean up local state only
             if self.main_window:
                  self.main_window.show_status_message(f"Peer {username} disconnected: {reason}")
         else:
-            print(f"[WARN] Received disconnect for non-current peer {username}")
+            logging.warning(f"Received disconnect for non-current peer {username}")
 
 
     @pyqtSlot(str, str)
@@ -578,16 +660,16 @@ class AppController(QObject):
         """Handles `chat_message_received_signal`."""
         # TODO (Backend): Backend receives `chat_message` from User A to User B,
         # relays it as `chat_message` from User A to User B.
-        print(f"Chat from {sender_username}: {message}")
+        logging.info(f"Chat from {sender_username}: {message}")
         if self.main_window and sender_username == self.current_peer_uid:
             # Format message before appending to UI
             formatted_message = f"{sender_username}: {message}"
             self.main_window.append_chat_message(formatted_message)
             # TODO (Client): Add notification/highlight for new messages?
         elif not self.current_peer_uid:
-             print("[WARN] Chat message received but no peer connected.")
+             logging.warning("Chat message received but no peer connected.")
         else:
-             print(f"[WARN] Chat message received from {sender_username} but connected to {self.current_peer_uid}")
+             logging.warning(f"Chat message received from {sender_username} but connected to {self.current_peer_uid}")
              # TODO (Client): Maybe still show message but indicate it's unexpected?
 
     # --- MainWindow Signal Handlers (Actions originating FROM UI) ---
@@ -596,7 +678,7 @@ class AppController(QObject):
     def handle_request_view(self, target_uid):
         """Handles the 'Connect' button click from MainWindow to request viewing a peer."""
         # This action triggers a request TO the backend.
-        print(f"[DEBUG Client {self.username}] UI requested to view UID: {target_uid}")
+        logging.debug(f"UI requested to view UID: {target_uid}")
 
         if not target_uid or target_uid.strip() == "" or target_uid == self.username:
             QMessageBox.warning(self.main_window,"Error","Please enter a valid Peer UID to connect to (cannot connect to self).")
@@ -624,7 +706,7 @@ class AppController(QObject):
                 self.main_window.set_peer_connection_status(ui.MainWindow.PEER_STATUS_CONNECTING)
                 self.main_window.show_status_message(f"Requesting to view {target_uid}'s screen...")
                 self.main_window.request_view_button.setEnabled(False) # Disable button while waiting
-                print(f"[DEBUG] Sent view request to {target_uid}, waiting for response")
+                logging.debug(f"Sent view request to {target_uid}, waiting for response")
             elif not success:
                  QMessageBox.warning(self.main_window,"Error","Failed to send view request (WebSocket error).")
                  if self.main_window: # Reset UI state
@@ -642,11 +724,11 @@ class AppController(QObject):
     def handle_disconnect(self, inform_peer=True):
         """Handles disconnection from current peer (UI button click or internal trigger)."""
         if not self.current_peer_uid:
-            print("Not currently connected to a peer.")
+            logging.warning("Disconnect called but not connected to a peer.")
             return
 
         peer_to_disconnect = self.current_peer_uid
-        print(f"Disconnecting from peer: {peer_to_disconnect}")
+        logging.info(f"Disconnecting from peer: {peer_to_disconnect}")
 
         try:
             # Stop sharing if *we* are currently sharing
@@ -669,7 +751,7 @@ class AppController(QObject):
                      })
 
         except Exception as e:
-            print(f"Error during disconnect signalling: {e}")
+            logging.exception(f"Error during disconnect signalling: {e}")
             traceback.print_exc()
         finally:
              # --- Always clean up local client state regardless of send success ---
@@ -689,7 +771,7 @@ class AppController(QObject):
             return
 
         if self.current_peer_uid and self.websocket_handler and self.websocket_handler.is_connected:
-             print(f"Sending chat to {self.current_peer_uid}: {message}")
+             logging.info(f"Sending chat to {self.current_peer_uid}: {message}")
              # TODO (Backend): Backend needs to handle `chat_message`.
              # It should find the `current_peer_uid`'s connection and forward the message
              # (as `chat_message` type, ensuring `from_user` is set correctly).
@@ -701,7 +783,7 @@ class AppController(QObject):
                       self.main_window.append_chat_message(f"You: {message}")
              else:
                  # Fallback if specific method doesn't exist
-                 print("[ERROR] WebSocketHandler missing send_chat_message method.")
+                 logging.error("WebSocketHandler missing send_chat_message method.")
                  self.websocket_handler.send_message({
                      "type": "chat_message",
                      "to_user": self.current_peer_uid,
@@ -712,7 +794,7 @@ class AppController(QObject):
                       self.main_window.append_chat_message(f"You: {message}")
 
         else:
-             print("[WARN] Cannot send chat: No peer connected or WebSocket disconnected.")
+             logging.warning("Cannot send chat: No peer connected or WebSocket disconnected.")
              if self.main_window:
                  self.main_window.append_chat_message("<i>Error: Not connected. Cannot send message.</i>")
 
@@ -723,7 +805,7 @@ class AppController(QObject):
         # TODO (Backend): Consider if an explicit logout notification is needed.
         # E.g., sending a specific WS message or calling an HTTP /api/logout endpoint
         # to allow the backend to clean up session/token state immediately.
-        print("Controller: Handling logout.")
+        logging.info("Handling logout.")
         # 1. Disconnect from peer if connected (inform peer via backend)
         if self.current_peer_uid:
             self.handle_disconnect(inform_peer=True)
@@ -736,7 +818,7 @@ class AppController(QObject):
         # 3. Stop RemoteController if active
         if self.remote_controller:
              if hasattr(self.remote_controller, 'stop'):
-                  print("Stopping RemoteController...")
+                  logging.info("Stopping RemoteController...")
                   self.remote_controller.stop()
              self.remote_controller = None
         self._is_sharing_screen = False
@@ -749,7 +831,7 @@ class AppController(QObject):
                       self.main_window.screen_display_widget.pixmap = QPixmap()
                       self.main_window.screen_display_widget.update()
              except Exception as e:
-                  print(f"Error clearing screen during logout: {e}")
+                  logging.error(f"Error clearing screen during logout: {e}")
              self.main_window.close()
              self.main_window = None
 
@@ -785,10 +867,10 @@ class AppController(QObject):
             self.remote_controller.send_input_event(event_data)
         else:
             # Input ignored - print reason if needed for debugging
-            # if not self.current_peer_uid: print(f"[DEBUG] Input ignored: No peer.")
-            # if not self.remote_controller: print(f"[DEBUG] Input ignored: No RemoteController.")
-            # if not (self.main_window and self.main_window.screen_display_widget): print(f"[DEBUG] Input ignored: No screen widget.")
-            # if self.main_window and self.main_window.screen_display_widget._view_only: print(f"[DEBUG] Input ignored: View-Only mode.")
+            if not self.current_peer_uid: logging.debug("Input ignored: No peer.")
+            if not self.remote_controller: logging.debug("Input ignored: No RemoteController.")
+            if not (self.main_window and self.main_window.screen_display_widget): logging.debug("Input ignored: No screen widget.")
+            if self.main_window and self.main_window.screen_display_widget._view_only: logging.debug("Input ignored: View-Only mode.")
             pass
 
 
@@ -799,7 +881,7 @@ class AppController(QObject):
         # This method is called when such a relayed event is received.
         # Note: Backend should have already checked permission before relaying.
         if not event_data or not controller_uid:
-            print(f"[DEBUG SHARER {self.username}] Ignoring received input: No event data or controller UID.")
+            logging.debug(f"Ignoring received input: No event data or controller UID (Sharer: {self.username}).")
             return
 
         # --- Check Local Permission Cache --- 
@@ -812,7 +894,7 @@ class AppController(QObject):
                 # Delegate simulation to utils module
                 utils.simulate_input(event_data)
             except Exception as e:
-                print(f"[ERROR SHARER {self.username}] Failed to simulate input: {e}")
+                logging.error(f"Failed to simulate received input from {controller_uid}: {e}")
                 # traceback.print_exc() # Optional detailed trace
         else:
              # Permission not granted locally - Request it via UI thread signal
@@ -820,9 +902,10 @@ class AppController(QObject):
              # or the initial request attempt.
              if controller_uid in self._permission_requests_pending:
                  # print(f"[DEBUG SHARER {self.username}] Permission request already pending for {controller_uid}. Ignoring event.")
+                 logging.debug(f"Permission request already pending for {controller_uid}. Ignoring event.")
                  return # Avoid spamming dialogs
 
-             print(f"[DEBUG SHARER {self.username}] Local permission check FAILED for {controller_uid}. Emitting request signal...")
+             logging.debug(f"Local permission check FAILED for {controller_uid}. Emitting request signal...")
              # Mark request as pending *before* emitting signal
              self._permission_requests_pending.add(controller_uid)
              # Emit signal to ask user in UI thread
@@ -836,23 +919,18 @@ class AppController(QObject):
         allowed = False # Default
         try:
             if not self.main_window:
-                print(f"[ERROR] Cannot show permission dialog for {controller_uid}: MainWindow closed.")
+                logging.error(f"Cannot show permission dialog for {controller_uid}: MainWindow closed.")
                 # TODO (Client): Silently deny or handle? If main window closed, we likely disconnected anyway.
                 return
 
             # Avoid dialog if already connected to someone else (shouldn't happen often)
             if self.current_peer_uid != controller_uid:
-                 print(f"[WARN] Received control request from {controller_uid} but connected to {self.current_peer_uid}. Denying.")
+                 logging.warning(f"Received control request from {controller_uid} but connected to {self.current_peer_uid}. Denying.")
                  # Silently deny or inform user?
                  self._send_permission_response(controller_uid, False) # Inform peer they were denied
                  return
 
-            # Re-check permission in case it was granted while signal was queued
-            if self.control_permissions.get(controller_uid):
-                print(f"[DEBUG SHARER {self.username}] Permission already granted for {controller_uid} before dialog. Skipping.")
-                return
-
-            print(f"[UI SLOT {self.username}] Showing permission dialog for {controller_uid}")
+            logging.debug(f"Showing permission dialog for {controller_uid}")
             reply = QMessageBox.question(
                 self.main_window,
                 "Control Request",
@@ -865,9 +943,9 @@ class AppController(QObject):
             self.control_permissions[controller_uid] = allowed # Update local cache
 
             if allowed:
-                print(f"[UI SLOT {self.username}] Permission GRANTED for {controller_uid} by user.")
+                logging.debug(f"Input control permission GRANTED for {controller_uid} by user.")
             else:
-                print(f"[UI SLOT {self.username}] Permission DENIED for {controller_uid} by user.")
+                logging.debug(f"Input control permission DENIED for {controller_uid} by user.")
 
             # Send permission update TO the backend/peer
             # TODO (Backend): Backend receives this `input_permission_update`.
@@ -883,8 +961,7 @@ class AppController(QObject):
                  self.main_window.update_control_status_display() # Update status bar
 
         except Exception as e:
-            print(f"[UI SLOT {self.username}] Error showing/handling permission dialog: {e}")
-            traceback.print_exc()
+            logging.exception(f"Error showing/handling permission dialog for {controller_uid}: {e}")
             # Attempt to deny on error to be safe
             self._send_permission_response(controller_uid, False)
         finally:
@@ -903,16 +980,16 @@ class AppController(QObject):
                 "allowed": allowed,
             }
             self.websocket_handler.send_message(response_message)
-            print(f"[UI SLOT {self.username}] Sent permission update ({allowed}) to {controller_uid}")
+            logging.debug(f"Sent permission update ({allowed}) to {controller_uid}")
         else:
-            print(f"[WARN] Cannot send permission response: WebSocket disconnected.")
+            logging.warning("Cannot send permission response: WebSocket disconnected.")
 
     @pyqtSlot(bool)
     def handle_mouse_permission_change(self, allowed):
         """Handles the toggle of the 'Allow Peer Mouse Control' checkbox in MainWindow UI (when SHARING)."""
         # This is triggered by the *user* clicking the checkbox in their own UI.
         if not self.current_peer_uid:
-            print("[DEBUG] Ignoring mouse permission change: No peer connected.")
+            logging.debug("Ignoring mouse permission change: No peer connected.")
             # Revert checkbox state if toggled erroneously
             if self.main_window:
                  self.main_window.mouse_permission_checkbox.blockSignals(True)
@@ -920,7 +997,7 @@ class AppController(QObject):
                  self.main_window.mouse_permission_checkbox.blockSignals(False)
             return
 
-        print(f"[DEBUG SHARER {self.username}] UI changed mouse permission for {self.current_peer_uid} to: {allowed}")
+        logging.info(f"User toggled mouse permission for peer {self.current_peer_uid} to: {allowed}")
         self.control_permissions[self.current_peer_uid] = allowed # Update local state
 
         # Send permission update TO the backend/peer
@@ -933,7 +1010,7 @@ class AppController(QObject):
                 "allowed": allowed,
             }
             self.websocket_handler.send_message(message)
-            print(f"[DEBUG] Sent input permission update to {self.current_peer_uid}: {allowed}")
+            logging.debug(f"Sent input permission update to {self.current_peer_uid}: {allowed}")
 
         # Update local status bar display
         if self.main_window:
@@ -948,21 +1025,21 @@ class AppController(QObject):
         # starts when it receives the first binary screen frame from this client, directed
         # at the `current_peer_uid`. It should then start relaying these frames.
         if not self.current_peer_uid:
-            print("No peer connected. Cannot start sharing.")
+            logging.warning("Start sharing requested but no peer connected.")
             QMessageBox.warning(self.main_window, "Sharing Error", "Please connect to a peer first.")
             if self.main_window: self.main_window.set_sharing_state(False) # Reset UI
             return
 
         if self._is_sharing_screen:
-            print("Already sharing screen. Ignoring request.")
+            logging.info("Start sharing requested but already sharing.")
             return
 
         if not self.remote_controller:
-             print("[ERROR] RemoteController not initialized. Cannot start sharing.")
+             logging.error("RemoteController not initialized. Cannot start sharing.")
              QMessageBox.critical(self.main_window, "Error", "Internal error: Remote controller not ready.")
              return
 
-        print(f"Attempting to start screen sharing to peer: {self.current_peer_uid}")
+        logging.info(f"Attempting to start screen sharing to peer: {self.current_peer_uid}")
         try:
             # Update UI immediately to show potential "sharing" state (actual state confirmed by signal)
             # if self.main_window: self.main_window.set_sharing_state(True)
@@ -979,8 +1056,7 @@ class AppController(QObject):
             # State `_is_sharing_screen = True` is set by `_on_screen_share_status_changed` signal handler.
 
         except Exception as e:
-            print(f"Error starting screen sharing: {e}")
-            traceback.print_exc()
+            logging.exception(f"Error starting screen sharing: {e}")
             self._is_sharing_screen = False # Ensure state is reset on error
             if self.main_window:
                 self.main_window.set_sharing_state(False) # Reset UI
@@ -998,12 +1074,12 @@ class AppController(QObject):
             return
 
         if not self.remote_controller:
-             print("[ERROR] RemoteController not initialized. Cannot stop sharing.")
+             logging.error("RemoteController not initialized. Cannot stop sharing.")
              self._is_sharing_screen = False # Reset state anyway
              if self.main_window: self.main_window.set_sharing_state(False)
              return
 
-        print("Stopping screen sharing...")
+        logging.info("Stopping screen sharing...")
         try:
             # Stop sharing via RemoteController
             self.remote_controller.stop_screen_sharing()
@@ -1018,8 +1094,7 @@ class AppController(QObject):
             #     })
 
         except Exception as e:
-            print(f"Error stopping screen sharing: {e}")
-            traceback.print_exc()
+            logging.exception(f"Error stopping screen sharing: {e}")
             # Still attempt to reset state even if error occurs during stop
             self._is_sharing_screen = False
             if self.main_window:
@@ -1038,7 +1113,7 @@ class AppController(QObject):
     @pyqtSlot(bool)
     def _on_screen_share_status_changed(self, is_sharing):
         """Called by RemoteController when sharing actually starts or stops."""
-        print(f"RemoteController reported sharing status changed to: {is_sharing}")
+        logging.info(f"Screen sharing status changed to: {is_sharing}")
         self._is_sharing_screen = is_sharing
         if self.main_window:
             self.main_window.set_sharing_state(is_sharing) # Update UI based on actual status
@@ -1056,7 +1131,7 @@ class AppController(QObject):
     @pyqtSlot(str)
     def _on_remote_controller_error(self, error_message):
         """Called when RemoteController encounters an error during capture/simulation."""
-        print(f"[ERROR] RemoteController error: {error_message}")
+        logging.error(f"RemoteController error: {error_message}")
         # Stop sharing if an error occurs in the controller
         if self._is_sharing_screen:
              self.stop_screen_sharing(inform_peer=False)
@@ -1071,7 +1146,7 @@ class AppController(QObject):
     @pyqtSlot(int)
     def _handle_quality_changed(self, quality):
         if self._stream_quality != quality:
-            print(f"Stream quality setting changed to: {quality}%")
+            logging.debug(f"Stream quality setting changed by UI to: {quality}%")
             self._stream_quality = quality
             if self.remote_controller and self._is_sharing_screen:
                 self.remote_controller.update_sharing_settings(quality=quality)
@@ -1083,7 +1158,7 @@ class AppController(QObject):
     def _handle_scale_changed(self, scale_percent):
         scale_factor = scale_percent / 100.0
         if self._stream_scale_factor != scale_factor:
-            print(f"Stream scale setting changed to: {scale_percent}% (Factor: {scale_factor})")
+            logging.debug(f"Stream scale setting changed by UI to: {scale_percent}% (Factor: {scale_factor})")
             self._stream_scale_factor = scale_factor
             if self.remote_controller and self._is_sharing_screen:
                 self.remote_controller.update_sharing_settings(scale_factor=scale_factor)
@@ -1092,7 +1167,7 @@ class AppController(QObject):
     @pyqtSlot(int)
     def _handle_fps_changed(self, fps):
          if self._stream_fps != fps:
-            print(f"Stream Max FPS setting changed to: {fps}")
+            logging.debug(f"Stream Max FPS setting changed by UI to: {fps}")
             self._stream_fps = fps
             if self.remote_controller and self._is_sharing_screen:
                 self.remote_controller.update_sharing_settings(fps=fps)
@@ -1102,7 +1177,7 @@ class AppController(QObject):
     def _handle_monitor_changed(self, monitor_index):
         """Handles signal when monitor selection changes (1-based index)."""
         if self._stream_monitor_index != monitor_index:
-            print(f"Stream monitor setting changed to index: {monitor_index}")
+            logging.debug(f"Stream monitor setting changed by UI to index: {monitor_index}")
             self._stream_monitor_index = monitor_index
             if self.remote_controller and self._is_sharing_screen:
                 self.remote_controller.update_sharing_settings(monitor_index=monitor_index)
@@ -1145,7 +1220,7 @@ class AppController(QObject):
     def _attempt_reconnect(self):
         """Attempts to reconnect to the WebSocket server."""
         self._reconnect_attempts += 1
-        print(f"Attempting to reconnect (Attempt {self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS})")
+        logging.info(f"Attempting to reconnect (Attempt {self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS})")
 
         # Update UI
         if self.main_window:
@@ -1158,7 +1233,7 @@ class AppController(QObject):
 
         # Check if max attempts reached
         if self._reconnect_attempts >= self.MAX_RECONNECT_ATTEMPTS and self._reconnect_timer.isActive():
-            print("Max reconnect attempts reached. Giving up.")
+            logging.warning("Max reconnect attempts reached. Giving up.")
             self._reconnect_timer.stop()
             if self.main_window:
                 self.main_window.show_status_message("WebSocket Disconnected. Max reconnect attempts reached.")
@@ -1173,24 +1248,24 @@ class AppController(QObject):
         allowed = False # Default
         try:
             if not self.main_window:
-                print("[Error] Cannot ask view permission, main window missing.")
+                logging.error("[Error] Cannot ask view permission, main window missing.")
                 # TODO (Client): Reject automatically if UI isn't there?
                 # self._send_view_response(requester_uid, False)
                 return
 
             # Prevent accepting connection if already connected to someone else
             if self.current_peer_uid and self.current_peer_uid != requester_uid:
-                 print(f"Already connected to {self.current_peer_uid}. Rejecting new request from {requester_uid}.")
+                 logging.warning(f"Already connected to {self.current_peer_uid}. Rejecting new request from {requester_uid}.")
                  QMessageBox.information(self.main_window, "Busy", f"Already connected to {self.current_peer_uid}. Please disconnect first.")
                  # Send rejection response TO backend/peer
                  self._send_view_response(requester_uid, False)
                  return
             # Handle case where request comes from current peer (shouldn't happen in normal flow)
             elif self.current_peer_uid == requester_uid:
-                 print(f"[WARN] Received view request from already connected peer {requester_uid}. Ignoring.")
+                 logging.warning(f"[WARN] Received view request from already connected peer {requester_uid}. Ignoring.")
                  return
 
-            print(f"[UI SLOT] Asking user permission for view request from {requester_uid}")
+            logging.debug(f"[UI SLOT] Asking user permission for view request from {requester_uid}")
             reply = QMessageBox.question(
                 self.main_window,
                 "View Request",
@@ -1208,7 +1283,7 @@ class AppController(QObject):
             self._send_view_response(requester_uid, allowed)
 
             if allowed:
-                print(f"[UI SLOT] User ALLOWED view request from {requester_uid}")
+                logging.debug(f"[UI SLOT] User ALLOWED view request from {requester_uid}")
                 # Set peer connection state locally
                 self.current_peer_uid = requester_uid
                 self.control_permissions.clear() # Clear old permissions for new peer
@@ -1223,12 +1298,11 @@ class AppController(QObject):
                      self.main_window.mouse_permission_checkbox.blockSignals(False)
                      self.main_window.update_control_status_display()
             else:
-                print(f"[UI SLOT] User DENIED view request from {requester_uid}")
+                logging.debug(f"[UI SLOT] User DENIED view request from {requester_uid}")
                 # No local state change needed, UI remains disconnected
 
         except Exception as e:
-            print(f"[UI SLOT] Error asking view permission: {e}")
-            traceback.print_exc()
+            logging.exception(f"Error asking view permission for {requester_uid}: {e}")
             # Ensure rejection response is sent on error
             if requester_uid:
                  self._send_view_response(requester_uid, False)
@@ -1243,10 +1317,10 @@ class AppController(QObject):
                 "allowed": allowed,
                 "message": ("View request accepted" if allowed else "View request denied by user"),
             }
-            print(f"Sending view_response to {target_uid}: Allowed={allowed}")
+            logging.debug(f"Sending view_response to {target_uid}: Allowed={allowed}")
             self.websocket_handler.send_message(response_message)
         else:
-             print(f"[ERROR] Cannot send view response to {target_uid}: WebSocket disconnected.")
+             logging.error(f"Cannot send view response to {target_uid}: WebSocket disconnected.")
 
 
     # --- Application Lifecycle ---
@@ -1260,7 +1334,7 @@ class AppController(QObject):
         """Ensures resources are cleaned up gracefully on application exit."""
         # TODO (Backend): Consider if backend needs notification on clean client exit
         # (e.g., via WS close frame or explicit `disconnect_peer` before closing).
-        print("Cleaning up before exit...")
+        logging.info("Cleaning up before application exit...")
         # Stop screen sharing if active
         if self._is_sharing_screen:
              self.stop_screen_sharing(inform_peer=False) # Stop locally
@@ -1268,13 +1342,14 @@ class AppController(QObject):
         # Stop RemoteController thread/tasks
         if self.remote_controller:
              if hasattr(self.remote_controller, 'stop'):
-                 self.remote_controller.stop()
+                  logging.info("Stopping RemoteController...")
+                  self.remote_controller.stop()
 
         # Stop WebSocket handler (sends close frame)
         if self.websocket_handler:
             self.websocket_handler.stop()
 
-        print("Cleanup finished.")
+        logging.info("Cleanup finished.")
 
 
 if __name__ == "__main__":

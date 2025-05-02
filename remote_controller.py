@@ -1,5 +1,6 @@
 import threading
 import time
+import logging
 import json
 import base64
 import io
@@ -8,6 +9,7 @@ from PyQt5.QtGui import QImage, QPixmap
 import pyautogui
 import screeninfo
 from PIL import ImageGrab, Image
+from utils import capture_screen_frame, simulate_input
 
 class RemoteController(QObject):
     """
@@ -33,9 +35,9 @@ class RemoteController(QObject):
         
         # Screen sharing settings
         self.quality = 75  # JPEG quality (0-100)
-        self.scale_factor = 0.75  # Scale factor (0.25-1.0)
-        self.fps = 15      # Target frames per second
-        self.monitor_index = 0  # 0-based index
+        self.scale_factor = 1.0  # Scale factor (0.25-1.0)
+        self.fps = 30      # Target frames per second
+        self.monitor_index = 1  # 0-based index
         
         # Metrics for FPS calculation
         self._frame_count = 0
@@ -77,22 +79,18 @@ class RemoteController(QObject):
             
     # --- Screen Sharing Methods ---
     
-    def start_screen_sharing(self, quality=None, scale_factor=None, fps=None, monitor_index=None):
-        """Start capturing and sharing the screen."""
+    def start_screen_sharing(self, quality=75, scale=1.0, fps=30, monitor_index=1):
+        """Starts screen sharing with the specified settings."""
         if self._is_sharing:
-            self._log("Already sharing screen.", "warning")
+            self._log("Screen sharing already active", "warning")
             return
         
-        # Update settings if provided
-        if quality is not None:
-            self.quality = quality
-        if scale_factor is not None:
-            self.scale_factor = scale_factor
-        if fps is not None:
-            self.fps = fps
-        if monitor_index is not None:
-            self.monitor_index = monitor_index
-            
+        # Update settings
+        self.quality = quality
+        self.scale_factor = scale
+        self.fps = fps
+        self.monitor_index = monitor_index
+        
         self._is_sharing = True
         self._stop_sharing_flag.clear()
         self._frame_count = 0
@@ -135,13 +133,13 @@ class RemoteController(QObject):
         # Emit status signal
         self.screen_share_status_signal.emit(False)
     
-    def update_sharing_settings(self, quality=None, scale_factor=None, fps=None, monitor_index=None):
+    def update_sharing_settings(self, quality=None, scale=None, fps=None, monitor_index=None):
         """Update screen sharing settings."""
         if quality is not None:
             self.quality = max(10, min(100, quality))
         
-        if scale_factor is not None:
-            self.scale_factor = max(0.25, min(1.0, scale_factor))
+        if scale is not None:
+            self.scale_factor = max(0.25, min(1.0, scale))
         
         if fps is not None:
             self.fps = max(1, min(30, fps))
