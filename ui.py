@@ -968,35 +968,127 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         connection_groupbox.setObjectName("connection_groupbox")
         connection_layout = QVBoxLayout()
 
+        # Peer UID label and input in a horizontal layout
         peer_layout = QHBoxLayout()
         peer_layout.addWidget(QLabel("Peer UID:"))
         self.peer_input = QLineEdit()
         self.peer_input.setPlaceholderText("Enter Peer's Username")
         peer_layout.addWidget(self.peer_input)
-        
-        self.request_view_button = QPushButton("Request View")
-        self.request_view_button.setObjectName("request_view_button")
-        self.request_view_button.clicked.connect(self.on_request_view_clicked)
-        peer_layout.addWidget(self.request_view_button)
-
         connection_layout.addLayout(peer_layout)
+        
+        # Buttons in a horizontal layout below the UID field
+        buttons_layout = QHBoxLayout()
+        
+        # Request View button (green)
+        self.request_view_button = QPushButton("Connect")
+        self.request_view_button.setObjectName("connect_button")  # Changed name for CSS styling
+        self.request_view_button.setStyleSheet("background-color: #4CAF50; color: white;")  # Green color
+        self.request_view_button.setToolTip("Request to view peer's screen")
+        self.request_view_button.clicked.connect(self.on_request_view_clicked)
+        buttons_layout.addWidget(self.request_view_button)
 
+        # Disconnect button (red)
         self.disconnect_button = QPushButton("Disconnect")
         self.disconnect_button.setObjectName("disconnect_button")
+        self.disconnect_button.setStyleSheet("background-color: #F44336; color: white;")  # Red color
+        self.disconnect_button.setToolTip("Disconnect from current peer")
         self.disconnect_button.clicked.connect(self.disconnect_signal.emit)
         self.disconnect_button.setEnabled(False)  # Initially disabled
-        connection_layout.addWidget(self.disconnect_button)
+        buttons_layout.addWidget(self.disconnect_button)
         
+        connection_layout.addLayout(buttons_layout)
         connection_groupbox.setLayout(connection_layout)
         sidebar_content_layout.addWidget(connection_groupbox)
 
+        # --- Stream Settings GroupBox --- 
+        # Create this before the Sharer GroupBox to establish proper logical flow
+        self.settings_groupbox = QGroupBox("Stream Settings")
+        self.settings_groupbox.setObjectName("settings_groupbox")
+        self.settings_groupbox.setVisible(False)  # Start hidden
+        self.settings_groupbox.setEnabled(False)  # Start disabled
+        settings_layout = QFormLayout(self.settings_groupbox)
+        settings_layout.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        settings_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        settings_layout.setLabelAlignment(Qt.AlignLeft)
+        settings_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        # Monitor Selection
+        monitor_layout = QHBoxLayout()
+        self.monitor_combobox = QComboBox()
+        self.monitor_combobox.setObjectName("monitor_combobox")
+        self.monitor_combobox.setToolTip("Select which monitor to share")
+        self._populate_monitor_combobox()  # Populate with available monitors
+        self.monitor_combobox.currentIndexChanged.connect(self._emit_monitor_index)
+        monitor_layout.addWidget(self.monitor_combobox, 1)
+        settings_layout.addRow("Monitor:", monitor_layout)
+
+        # Quality Slider with improved layout
+        quality_layout = QHBoxLayout()
+        self.quality_slider = QSlider(Qt.Horizontal)
+        self.quality_slider.setObjectName("quality_slider")
+        self.quality_slider.setToolTip("Higher quality = better image, more bandwidth")
+        self.quality_slider.setRange(10, 100)
+        self.quality_slider.setValue(self.DEFAULT_QUALITY)
+        self.quality_slider.setTickInterval(10)
+        self.quality_slider.setTickPosition(QSlider.TicksBelow)
+        self.quality_label = QLabel(f"{self.DEFAULT_QUALITY}%")
+        self.quality_label.setObjectName("quality_value_label")
+        self.quality_label.setMinimumWidth(40)
+        self.quality_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.quality_slider.valueChanged.connect(self._update_quality_label_and_emit)
+        quality_layout.addWidget(self.quality_slider, 1)  # Give slider stretch factor
+        quality_layout.addWidget(self.quality_label)
+        settings_layout.addRow("Quality:", quality_layout)
+
+        # Scale Slider with improved layout
+        scale_layout = QHBoxLayout()
+        self.scale_slider = QSlider(Qt.Horizontal)
+        self.scale_slider.setObjectName("scale_slider")
+        self.scale_slider.setToolTip("Scale down image to reduce bandwidth")
+        self.scale_slider.setRange(25, 100)
+        self.scale_slider.setValue(self.DEFAULT_SCALE)
+        self.scale_slider.setTickInterval(25)
+        self.scale_slider.setTickPosition(QSlider.TicksBelow)
+        self.scale_label = QLabel(f"{self.DEFAULT_SCALE}%")
+        self.scale_label.setObjectName("scale_value_label")
+        self.scale_label.setMinimumWidth(40)
+        self.scale_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.scale_slider.valueChanged.connect(self._update_scale_label_and_emit)
+        scale_layout.addWidget(self.scale_slider, 1)  # Give slider stretch factor
+        scale_layout.addWidget(self.scale_label)
+        settings_layout.addRow("Scale:", scale_layout)
+
+        # FPS ComboBox with improved layout
+        fps_layout = QHBoxLayout()
+        self.fps_combobox = QComboBox()
+        self.fps_combobox.setObjectName("fps_combobox")
+        self.fps_combobox.setToolTip("Higher FPS = smoother video, more bandwidth")
+        for fps_option in self.FPS_OPTIONS:
+            self.fps_combobox.addItem(str(fps_option), userData=fps_option)
+        # Find and set the default FPS index
+        default_fps_index = self.fps_combobox.findData(self.DEFAULT_FPS)
+        if default_fps_index != -1:
+             self.fps_combobox.setCurrentIndex(default_fps_index)
+        self.fps_combobox.currentIndexChanged.connect(self._emit_fps_value)
+        fps_layout.addWidget(self.fps_combobox, 1)
+        settings_layout.addRow("Max FPS:", fps_layout)
+        
+        # Add Reset to Default button
+        reset_layout = QHBoxLayout()
+        self.reset_settings_button = QPushButton("Reset to Default")
+        self.reset_settings_button.setObjectName("reset_settings_button")
+        self.reset_settings_button.setToolTip("Reset stream settings to default values")
+        self.reset_settings_button.clicked.connect(self._reset_stream_settings)
+        reset_layout.addStretch(1)
+        reset_layout.addWidget(self.reset_settings_button)
+        settings_layout.addRow("", reset_layout)
+
+        # Add the settings groupbox to the sidebar layout (BEFORE the sharer groupbox)
+        sidebar_content_layout.addWidget(self.settings_groupbox)
+
         # --- Sharer Control GroupBox --- 
-        # Make the groupbox itself checkable
-        self.sharer_groupbox = QGroupBox("Share Your Screen")
+        self.sharer_groupbox = QGroupBox("Share Screen Controls")
         self.sharer_groupbox.setObjectName("sharer_groupbox")
-        self.sharer_groupbox.setCheckable(True)
-        self.sharer_groupbox.setChecked(False)
-        self.sharer_groupbox.toggled.connect(self.on_sharer_toggled)
         sharer_layout = QVBoxLayout()
         self.sharer_groupbox.setLayout(sharer_layout)
         self.sharer_groupbox.setEnabled(False)  # Disabled until connected
@@ -1016,61 +1108,7 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         sharing_buttons_layout.addWidget(self.stop_sharing_button)
         sharer_layout.addLayout(sharing_buttons_layout)
         
-        # --- Settings inside Sharer GroupBox (Initially Hidden/Disabled) --- 
-        self.settings_groupbox = QGroupBox("Stream Settings")
-        self.settings_groupbox.setObjectName("settings_groupbox")
-        self.settings_groupbox.setVisible(False)  # Start hidden
-        self.settings_groupbox.setEnabled(False)  # Start disabled
-        settings_layout = QFormLayout(self.settings_groupbox)
-        settings_layout.setRowWrapPolicy(QFormLayout.DontWrapRows)
-        settings_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        settings_layout.setLabelAlignment(Qt.AlignLeft)
-        settings_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-
-        # Monitor Selection
-        self.monitor_combobox = QComboBox()
-        self._populate_monitor_combobox()  # Populate with available monitors
-        self.monitor_combobox.currentIndexChanged.connect(self._emit_monitor_index)
-        settings_layout.addRow("Monitor:", self.monitor_combobox)
-
-        # Quality Slider
-        quality_layout = QHBoxLayout()
-        self.quality_slider = QSlider(Qt.Horizontal)
-        self.quality_slider.setRange(10, 100)
-        self.quality_slider.setValue(self.DEFAULT_QUALITY)
-        self.quality_slider.setTickInterval(10)
-        self.quality_slider.setTickPosition(QSlider.TicksBelow)
-        self.quality_label = QLabel(f"{self.DEFAULT_QUALITY}%")
-        self.quality_slider.valueChanged.connect(self._update_quality_label_and_emit)
-        quality_layout.addWidget(self.quality_slider)
-        quality_layout.addWidget(self.quality_label)
-        settings_layout.addRow("Quality:", quality_layout)
-
-        # Scale Slider
-        scale_layout = QHBoxLayout()
-        self.scale_slider = QSlider(Qt.Horizontal)
-        self.scale_slider.setRange(25, 100)
-        self.scale_slider.setValue(self.DEFAULT_SCALE)
-        self.scale_slider.setTickInterval(25)
-        self.scale_slider.setTickPosition(QSlider.TicksBelow)
-        self.scale_label = QLabel(f"{self.DEFAULT_SCALE}%")
-        self.scale_slider.valueChanged.connect(self._update_scale_label_and_emit)
-        scale_layout.addWidget(self.scale_slider)
-        scale_layout.addWidget(self.scale_label)
-        settings_layout.addRow("Scale:", scale_layout)
-
-        # FPS ComboBox
-        self.fps_combobox = QComboBox()
-        for fps_option in self.FPS_OPTIONS:
-            self.fps_combobox.addItem(str(fps_option), userData=fps_option)
-        # Find and set the default FPS index
-        default_fps_index = self.fps_combobox.findData(self.DEFAULT_FPS)
-        if default_fps_index != -1:
-             self.fps_combobox.setCurrentIndex(default_fps_index)
-        self.fps_combobox.currentIndexChanged.connect(self._emit_fps_value)
-        settings_layout.addRow("Max FPS:", self.fps_combobox)
-
-        sharer_layout.addWidget(self.settings_groupbox)
+        # Add the sharer groupbox to the sidebar layout
         sidebar_content_layout.addWidget(self.sharer_groupbox)
 
         # --- Mouse Control Checkbox --- 
@@ -1198,29 +1236,22 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
 
     # --- Event Handlers --- 
     def on_sharer_toggled(self, checked):
-        # This is triggered by USER clicking the checkbox OR programmatically
-        # We only want to trigger START/STOP if the USER clicked it.
-        # The actual start/stop is handled by start/stop button clicks now.
-        # This toggle can enable/disable the inner settings box.
-        print(f"[UI MainWindow] Sharer GroupBox toggled: {checked}") # LOG
-        # self.settings_groupbox.setVisible(checked)
-        # self.settings_groupbox.setEnabled(checked)
-        # If user UNCHECKS the box, signal stop sharing
-        # if not checked and self.stop_sharing_button.isEnabled():
-             # self.stop_sharing_signal.emit()
-        # If user CHECKS the box, signal start sharing
-        # elif checked and self.start_sharing_button.isEnabled():
-             # self.start_sharing_signal.emit()
-        pass # Let buttons handle start/stop
+        # This method is no longer used since we removed the checkbox
+        # Keeping as a stub in case we need to restore functionality later
+        pass
 
     def on_request_view_clicked(self): # Renamed from on_connect_clicked
         peer_uid = self.peer_input.text().strip()
         if peer_uid:
+            # Set connecting state temporarily
+            self.set_peer_connection_status(self.PEER_STATUS_CONNECTING) # Show yellow connecting status
+            self._update_peer_connection_status_ui()
             self.request_view_signal.emit(peer_uid) # Emit renamed signal
-            # Disable button temporarily while request is in progress?
-            # self.request_view_button.setEnabled(False)
+            # Disable connect button temporarily while request is in progress
+            self.request_view_button.setEnabled(False)
+            self.show_status_message(f"Connecting to {peer_uid}...")
         else:
-            QMessageBox.warning(self, "Input Required", "Please enter a Peer UID to connect to.")
+            QMessageBox.warning(self, "Input Required", "Please enter a Peer Username to connect to.")
 
     def on_chat_send(self):
         message = self.chat_input.text().strip()
@@ -1261,10 +1292,15 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
             connected_to_uid: UID of the connected peer
         """
         print(f"Setting connected state to peer: {connected_to_uid}")
-        self.disconnect_button.setEnabled(True)
-        self.request_view_button.setEnabled(False)
-        self.peer_input.setEnabled(False)
+        # Update connection controls
+        self.disconnect_button.setEnabled(True)  # Enable disconnect button
+        self.request_view_button.setEnabled(False)  # Disable connect button
+        self.peer_input.setEnabled(False)  # Disable UID input field
         self.sharer_groupbox.setEnabled(True)  # Enable sharing controls
+        
+        # Always show and enable Stream Settings when connected
+        self.settings_groupbox.setVisible(True)
+        self.settings_groupbox.setEnabled(True)  # Enable settings immediately when connected
         
         # New toolbar updates
         self.set_peer_connection_status(self.PEER_STATUS_CONNECTED)
@@ -1287,14 +1323,8 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         # Add connection message to chat
         self.append_chat_message(f"Connected to {connected_to_uid}")
         
-        # Check if sharing checkbox is on, and if so, enable settings
-        if self.sharer_groupbox.isChecked():
-            self.settings_groupbox.setVisible(True)
-            self.settings_groupbox.setEnabled(True)
-            # Don't auto-start sharing
-        else:
-            self.settings_groupbox.setVisible(False)
-            self.settings_groupbox.setEnabled(False)
+        # Start with default stream settings visible and enabled
+        self.start_sharing_button.setEnabled(True)
 
     def set_disconnected_state(self, message="Ready"):
         """Updates UI to show disconnected state.
@@ -1303,13 +1333,14 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
             message: Optional status message to display
         """
         print(f"Setting disconnected state with message: {message}")
-        self.disconnect_button.setEnabled(False)
-        self.request_view_button.setEnabled(True)
-        self.peer_input.setEnabled(True)
+        # Update connection controls
+        self.disconnect_button.setEnabled(False)  # Disable disconnect button
+        self.request_view_button.setEnabled(True)  # Enable connect button
+        self.peer_input.setEnabled(True)  # Enable UID input field
         
         # Disable sharing controls
         self.sharer_groupbox.setEnabled(False)
-        self.sharer_groupbox.setChecked(False) # Uncheck
+        # No longer checkable: self.sharer_groupbox.setChecked(False)
         self.settings_groupbox.setVisible(False)
         self.settings_groupbox.setEnabled(False)
         
@@ -1355,7 +1386,8 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.set_role(self.ROLE_SHARING if is_sharing else self.ROLE_IDLE)
         
         # Update buttons
-        self.sharer_groupbox.setChecked(is_sharing)
+        # The groupbox is no longer checkable, so we don't need to check/uncheck it
+        # self.sharer_groupbox.setChecked(is_sharing)
         self.start_sharing_button.setEnabled(not is_sharing)
         self.stop_sharing_button.setEnabled(is_sharing)
         
@@ -1363,8 +1395,8 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.quick_share_button.setEnabled(not is_sharing and bool(self._connected_peer_username))
         self.quick_stop_button.setEnabled(is_sharing)
         
-        # Display settings if sharing
-        if is_sharing:
+        # Always make settings visible when connected
+        if self._connected_peer_username:
             self.settings_groupbox.setVisible(True)
             self.settings_groupbox.setEnabled(True)
         else:
@@ -1629,4 +1661,26 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
                 status_text = "Control: Unknown (UI Error)" # Fallback if widget doesn't exist
         
         self.control_status_label.setText(status_text)
+
+    # --- Helper methods for Stream Settings ---
+    def _reset_stream_settings(self):
+        """Reset all stream settings to their default values."""
+        # Reset quality slider
+        self.quality_slider.setValue(self.DEFAULT_QUALITY)
+        
+        # Reset scale slider
+        self.scale_slider.setValue(self.DEFAULT_SCALE)
+        
+        # Reset FPS combobox
+        default_fps_index = self.fps_combobox.findData(self.DEFAULT_FPS)
+        if default_fps_index != -1:
+            self.fps_combobox.setCurrentIndex(default_fps_index)
+            
+        # Reset monitor selection if possible
+        if len(screeninfo.get_monitors()) >= self.DEFAULT_MONITOR_INDEX:
+            default_monitor_index = self.DEFAULT_MONITOR_INDEX - 1  # Convert to 0-based
+            self.monitor_combobox.setCurrentIndex(default_monitor_index)
+            
+        # Show a brief status message
+        self.show_status_message("Stream settings reset to defaults", 3000)
 

@@ -544,4 +544,123 @@ QToolBar#main_toolbar QPushButton#toolbar_logout_button:pressed {
 /* Ensure screen display fills the space */
 #ScreenDisplayWidget {
     background-color: #141c2b; /* Match scrollarea dark background */
+}
+
+/* Connection Buttons */
+#connect_button {
+    background-color: #4CAF50; /* Green */
+    color: white;
+    border: 1px solid #388E3C;
+}
+
+#connect_button:hover {
+    background-color: #66BB6A; /* Lighter green */
+    border: 1px solid #4CAF50;
+}
+
+#connect_button:pressed {
+    background-color: #388E3C; /* Darker green */
+}
+
+#connect_button:disabled {
+    background-color: #305c32; /* Dark green */
+    color: #aaa;
+    border: 1px solid #305c32;
+}
+
+#disconnect_button {
+    background-color: #F44336; /* Red */
+    color: white;
+    border: 1px solid #D32F2F;
+}
+
+#disconnect_button:hover {
+    background-color: #EF5350; /* Lighter red */
+    border: 1px solid #F44336;
+}
+
+#disconnect_button:pressed {
+    background-color: #D32F2F; /* Darker red */
+}
+
+#disconnect_button:disabled {
+    background-color: #5c3230; /* Dark red */
+    color: #aaa;
+    border: 1px solid #5c3230;
+}
+
+/* === Stream Settings === */
+#settings_groupbox {
+    background-color: #253350; /* Slightly bluish dark navy */
+    border: 1px solid #344566;
+    border-radius: 6px;
+}
+
+#settings_groupbox::title {
+    background-color: #4a77cf; /* Blue accent */
+    color: white;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+#quality_slider, #scale_slider {
+    height: 20px;
+}
+
+#quality_slider::groove:horizontal, #scale_slider::groove:horizontal {
+    border: 1px solid #344566;
+    height: 8px;
+    background: #202940;
+    margin: 2px 0;
+    border-radius: 4px;
+}
+
+#quality_slider::handle:horizontal, #scale_slider::handle:horizontal {
+    background: #4a77cf; /* Blue accent */
+    border: 1px solid #3a67c9;
+    width: 16px;
+    height: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+
+#quality_slider::handle:horizontal:hover, #scale_slider::handle:horizontal:hover {
+    background: #5a87ef;
+}
+
+#quality_value_label, #scale_value_label {
+    font-weight: bold;
+    color: #5a87ef;
+    min-width: 45px;
+    padding: 0 5px;
+}
+
+#fps_combobox, #monitor_combobox {
+    border: 1px solid #344566;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: #283550;
+}
+
+#fps_combobox:hover, #monitor_combobox:hover {
+    border: 1px solid #4a77cf;
+}
+
+#reset_settings_button {
+    background-color: #344566;
+    color: #f0f0f0;
+    border: 1px solid #455b82;
+    border-radius: 4px;
+    padding: 4px 12px;
+    margin-top: 5px;
+}
+
+#reset_settings_button:hover {
+    background-color: #455b82;
+    border: 1px solid #566d99;
+}
+
+#reset_settings_button:pressed {
+    background-color: #273954;
 } 
