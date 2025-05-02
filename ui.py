@@ -711,7 +711,8 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         
         # Setup UI
         self.setWindowTitle(f"SCU Remote Desktop - {self.username}")
-        self.resize(1280, 720) # Increase default width further
+        self.resize(1200, 768) # Increase default width further
+        self.setMinimumWidth(1000) # Increase minimum width
         
         # Create enhanced toolbar with sections
         self._create_toolbar()
