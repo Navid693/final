@@ -570,4 +570,56 @@ QToolBar#main_toolbar QPushButton#fullscreen_button:pressed,
 QToolBar#main_toolbar QPushButton#theme_button:pressed,
 QToolBar#main_toolbar QPushButton#toolbar_logout_button:pressed {
     background-color: #c8c8c8; 
+}
+
+/* Sidebar styling */
+#sidebar {
+    background-color: #e8ebf2; /* Light gray background */
+    border-left: 1px solid #c5cad3;
+}
+
+#sidebar_toggle_container {
+    background-color: #e8ebf2; /* Match sidebar background */
+    border-left: 1px solid #c5cad3;
+}
+
+#sidebar_toggle_button {
+    background-color: #d0d4de;
+    color: #333333;
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-right: none;
+    border-left: 1px solid #c0c6d2;
+    border-top: 1px solid #c0c6d2;
+    border-bottom: 1px solid #c0c6d2;
+    font-size: 14pt;
+    font-weight: bold;
+    padding: 0;
+    margin-right: 0;
+}
+
+#sidebar_toggle_button:hover {
+    background-color: #c0c6d2;
+    color: #000000;
+}
+
+#content_container {
+    background-color: #f5f7fa; /* Light background */
+}
+
+/* Chat display special styling */
+#chat_display {
+    background-color: #ffffff; /* White background */
+    border: 1px solid #c5cad3;
+    border-radius: 4px;
+    color: #333333;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 9pt;
+    padding: 5px;
+    min-height: 100px;
+}
+
+/* Ensure screen display fills the space */
+#ScreenDisplayWidget {
+    background-color: #e0e3ea; /* Light gray background */
 } 

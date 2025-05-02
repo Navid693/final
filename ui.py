@@ -7,7 +7,10 @@ from PyQt5.QtWidgets import (
     QSpacerItem, QFrame # Import QSpacerItem and QFrame
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont, QPalette, QIcon
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
+from PyQt5.QtCore import (
+    Qt, QSize, QTimer, QThread, QMutex, pyqtSignal, pyqtSlot, QEvent, 
+    QPoint, QRect, QPropertyAnimation, QEasingCurve # Added QPropertyAnimation and QEasingCurve
+)
 import utils # Import utils to get monitor list
 import screeninfo # To get monitor info
 import time
@@ -899,17 +902,21 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for a cleaner look
+        main_layout.setSpacing(0)  # Remove spacing between screen and sidebar
 
         # --- Left Side: Screen Display --- 
-        screen_layout = QVBoxLayout()
+        self.screen_container = QWidget()
+        screen_layout = QVBoxLayout(self.screen_container)
+        screen_layout.setContentsMargins(10, 10, 10, 10)
 
         # --- Screen Display Widget --- 
         self.scroll_area = QScrollArea()
-        self.scroll_area.setBackgroundRole(QPalette.Dark) # Match dark theme potentially
+        self.scroll_area.setBackgroundRole(QPalette.Dark)
         self.scroll_area.setWidgetResizable(True)
         
-        self.screen_display_widget = ScreenDisplayWidget(self) # Parent needed?
-        self.screen_display_widget.setObjectName("ScreenDisplayWidget") # Set object name
+        self.screen_display_widget = ScreenDisplayWidget(self)
+        self.screen_display_widget.setObjectName("ScreenDisplayWidget")
         self.scroll_area.setWidget(self.screen_display_widget)
 
         screen_layout.addWidget(self.scroll_area)
@@ -919,12 +926,46 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.fit_checkbox.stateChanged.connect(self._toggle_fit_to_window)
         screen_layout.addWidget(self.fit_checkbox, alignment=Qt.AlignRight)
 
-        # --- Right Side: Controls --- 
-        controls_layout = QVBoxLayout()
-        controls_layout.setSpacing(15)
+        # --- Right Side: Collapsible Sidebar --- 
+        # Create sidebar container with fixed width
+        sidebar_container = QWidget()
+        sidebar_container.setObjectName("sidebar_container")
+        sidebar_layout = QHBoxLayout(sidebar_container)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
 
+        # --- Toggle Button for Sidebar ---
+        toggle_container = QWidget()
+        toggle_container.setFixedWidth(24)
+        toggle_container.setObjectName("sidebar_toggle_container")
+        toggle_layout = QVBoxLayout(toggle_container)
+        toggle_layout.setContentsMargins(0, 0, 0, 0)
+        toggle_layout.addStretch()
+        
+        self.sidebar_toggle_button = QPushButton("❯")
+        self.sidebar_toggle_button.setObjectName("sidebar_toggle_button")
+        self.sidebar_toggle_button.setFixedSize(24, 60)
+        self.sidebar_toggle_button.setToolTip("Toggle Sidebar")
+        self.sidebar_toggle_button.setCursor(Qt.PointingHandCursor)
+        self.sidebar_toggle_button.clicked.connect(self._toggle_sidebar)
+        
+        toggle_layout.addWidget(self.sidebar_toggle_button)
+        toggle_layout.addStretch()
+        
+        # Create the main sidebar widget
+        self.sidebar = QWidget()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setMinimumWidth(350)
+        self.sidebar.setMaximumWidth(350)
+        
+        # Create a layout for the sidebar content
+        sidebar_content_layout = QVBoxLayout(self.sidebar)
+        sidebar_content_layout.setSpacing(15)
+        sidebar_content_layout.setContentsMargins(10, 10, 10, 10)
+        
         # --- Connection GroupBox --- 
         connection_groupbox = QGroupBox("Connection")
+        connection_groupbox.setObjectName("connection_groupbox")
         connection_layout = QVBoxLayout()
 
         peer_layout = QHBoxLayout()
@@ -933,7 +974,7 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         self.peer_input.setPlaceholderText("Enter Peer's Username")
         peer_layout.addWidget(self.peer_input)
         
-        self.request_view_button = QPushButton("Request View") # Renamed from Connect
+        self.request_view_button = QPushButton("Request View")
         self.request_view_button.setObjectName("request_view_button")
         self.request_view_button.clicked.connect(self.on_request_view_clicked)
         peer_layout.addWidget(self.request_view_button)
@@ -942,22 +983,23 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
 
         self.disconnect_button = QPushButton("Disconnect")
         self.disconnect_button.setObjectName("disconnect_button")
-        self.disconnect_button.clicked.connect(self.disconnect_signal.emit) # Directly emit
-        self.disconnect_button.setEnabled(False) # Initially disabled
+        self.disconnect_button.clicked.connect(self.disconnect_signal.emit)
+        self.disconnect_button.setEnabled(False)  # Initially disabled
         connection_layout.addWidget(self.disconnect_button)
         
         connection_groupbox.setLayout(connection_layout)
-        controls_layout.addWidget(connection_groupbox)
+        sidebar_content_layout.addWidget(connection_groupbox)
 
         # --- Sharer Control GroupBox --- 
         # Make the groupbox itself checkable
         self.sharer_groupbox = QGroupBox("Share Your Screen")
+        self.sharer_groupbox.setObjectName("sharer_groupbox")
         self.sharer_groupbox.setCheckable(True)
         self.sharer_groupbox.setChecked(False)
-        self.sharer_groupbox.toggled.connect(self.on_sharer_toggled) # Handle check changes
+        self.sharer_groupbox.toggled.connect(self.on_sharer_toggled)
         sharer_layout = QVBoxLayout()
         self.sharer_groupbox.setLayout(sharer_layout)
-        self.sharer_groupbox.setEnabled(False) # Disabled until connected
+        self.sharer_groupbox.setEnabled(False)  # Disabled until connected
 
         # Start/Stop Buttons
         sharing_buttons_layout = QHBoxLayout()
@@ -976,8 +1018,9 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         
         # --- Settings inside Sharer GroupBox (Initially Hidden/Disabled) --- 
         self.settings_groupbox = QGroupBox("Stream Settings")
-        self.settings_groupbox.setVisible(False) # Start hidden
-        self.settings_groupbox.setEnabled(False) # Start disabled
+        self.settings_groupbox.setObjectName("settings_groupbox")
+        self.settings_groupbox.setVisible(False)  # Start hidden
+        self.settings_groupbox.setEnabled(False)  # Start disabled
         settings_layout = QFormLayout(self.settings_groupbox)
         settings_layout.setRowWrapPolicy(QFormLayout.DontWrapRows)
         settings_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
@@ -986,7 +1029,7 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
 
         # Monitor Selection
         self.monitor_combobox = QComboBox()
-        self._populate_monitor_combobox() # Populate with available monitors
+        self._populate_monitor_combobox()  # Populate with available monitors
         self.monitor_combobox.currentIndexChanged.connect(self._emit_monitor_index)
         settings_layout.addRow("Monitor:", self.monitor_combobox)
 
@@ -1028,40 +1071,84 @@ class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar 
         settings_layout.addRow("Max FPS:", self.fps_combobox)
 
         sharer_layout.addWidget(self.settings_groupbox)
-        controls_layout.addWidget(self.sharer_groupbox)
+        sidebar_content_layout.addWidget(self.sharer_groupbox)
 
         # --- Mouse Control Checkbox --- 
         self.mouse_permission_checkbox = QCheckBox("Allow Peer Mouse Control")
         self.mouse_permission_checkbox.setObjectName("mouse_permission_checkbox")
         self.mouse_permission_checkbox.toggled.connect(self._toggle_mouse_permission)
-        self.mouse_permission_checkbox.toggled.connect(self.update_control_status_display) # Connect to status update
-        self.mouse_permission_checkbox.setEnabled(False) # Disabled until connected
-        controls_layout.addWidget(self.mouse_permission_checkbox)
+        self.mouse_permission_checkbox.toggled.connect(self.update_control_status_display)
+        self.mouse_permission_checkbox.setEnabled(False)  # Disabled until connected
+        sidebar_content_layout.addWidget(self.mouse_permission_checkbox)
 
-        # --- Chat Area (Placeholder) --- 
-        chat_groupbox = QGroupBox("Chat")
+        # --- Chat Area --- 
+        self.chat_groupbox = QGroupBox("Chat")
+        self.chat_groupbox.setObjectName("chat_groupbox")
         chat_layout = QVBoxLayout()
         self.chat_display = QPlainTextEdit()
+        self.chat_display.setObjectName("chat_display")
         self.chat_display.setReadOnly(True)
         chat_layout.addWidget(self.chat_display)
         
         chat_input_layout = QHBoxLayout()
         self.chat_input = QLineEdit()
+        self.chat_input.setObjectName("chat_input")
         self.chat_input.setPlaceholderText("Enter chat message...")
         self.chat_send_button = QPushButton("Send")
+        self.chat_send_button.setObjectName("chat_send_button")
         self.chat_send_button.clicked.connect(self.on_chat_send)
-        self.chat_input.returnPressed.connect(self.on_chat_send) # Send on Enter
+        self.chat_input.returnPressed.connect(self.on_chat_send)  # Send on Enter
         chat_input_layout.addWidget(self.chat_input)
         chat_input_layout.addWidget(self.chat_send_button)
         chat_layout.addLayout(chat_input_layout)
         
-        chat_groupbox.setLayout(chat_layout)
-        controls_layout.addWidget(chat_groupbox) # Re-enabled chat section
-        controls_layout.addStretch() # Push controls to the top
+        self.chat_groupbox.setLayout(chat_layout)
+        sidebar_content_layout.addWidget(self.chat_groupbox)
+        sidebar_content_layout.addStretch()  # Push controls to the top
+        
+        # Add the toggle container and sidebar to the sidebar layout
+        sidebar_layout.addWidget(toggle_container)
+        sidebar_layout.addWidget(self.sidebar)
+        
+        # Add the screen container and sidebar container to the main layout
+        main_layout.addWidget(self.screen_container, 1)  # Give screen container stretch factor 1
+        main_layout.addWidget(sidebar_container, 0)  # Don't stretch the sidebar container
+        
+        # Create animation for sidebar collapse/expand
+        self.sidebar_animation = QPropertyAnimation(self.sidebar, b"minimumWidth")
+        self.sidebar_animation.setDuration(300)  # Animation duration in ms
+        self.sidebar_animation.setEasingCurve(QEasingCurve.InOutQuad)
+        
+        # Also animate maximum width to ensure proper collapsing
+        self.sidebar_animation_max = QPropertyAnimation(self.sidebar, b"maximumWidth")
+        self.sidebar_animation_max.setDuration(300)  # Animation duration in ms
+        self.sidebar_animation_max.setEasingCurve(QEasingCurve.InOutQuad)
+        
+        # Set sidebar state to expanded (default)
+        self._sidebar_expanded = True
 
-        # Add layouts to main layout
-        main_layout.addLayout(screen_layout, 75) # Screen takes 75% width
-        main_layout.addLayout(controls_layout, 25) # Controls take 25% width
+    def _toggle_sidebar(self):
+        """Toggle the sidebar between expanded and collapsed states."""
+        if self._sidebar_expanded:
+            # Collapse sidebar
+            self.sidebar_animation.setStartValue(self.sidebar.width())
+            self.sidebar_animation.setEndValue(0)
+            self.sidebar_animation_max.setStartValue(self.sidebar.width())
+            self.sidebar_animation_max.setEndValue(0)
+            self.sidebar_animation.start()
+            self.sidebar_animation_max.start()
+            self.sidebar_toggle_button.setText("❮")  # Change to left-pointing arrow
+            self._sidebar_expanded = False
+        else:
+            # Expand sidebar
+            self.sidebar_animation.setStartValue(self.sidebar.width())
+            self.sidebar_animation.setEndValue(350)
+            self.sidebar_animation_max.setStartValue(self.sidebar.width())
+            self.sidebar_animation_max.setEndValue(350)
+            self.sidebar_animation.start()
+            self.sidebar_animation_max.start()
+            self.sidebar_toggle_button.setText("❯")  # Change to right-pointing arrow
+            self._sidebar_expanded = True
 
     # --- Helper methods for UI --- 
     def _populate_monitor_combobox(self):
