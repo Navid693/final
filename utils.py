@@ -3,10 +3,12 @@ import struct
 import pickle
 import mss
 import mss.tools
-from PIL import Image
+from PIL import Image, ImageOps
 import numpy as np
 import pyautogui
 import io
+import time
+import traceback
 
 # --- Network Utilities ---
 
@@ -64,106 +66,195 @@ def recvall(sock, n):
             return None
     return bytes(data)
 
-# --- Screen Capture and Compression ---
+# --- Screen Capture, Scaling, Compression, and Cursor ---
 
-def capture_screenshot(monitor_number=1, quality=75):
-    """Captures a screenshot, compresses it (JPEG), and returns bytes."""
+def get_monitor_details():
+    """Returns a list of dictionaries with details for each monitor (excluding Monitor 0: All)."""
+    monitors = []
     try:
         with mss.mss() as sct:
-            # Get information about the monitor
-            monitor = sct.monitors[monitor_number]
+            # sct.monitors[0] is the full virtual screen, skip it
+            for i, monitor in enumerate(sct.monitors[1:], start=1):
+                details = {
+                    "index": i,
+                    "name": f"Monitor {i}",
+                    "size": f"{monitor['width']}x{monitor['height']}",
+                    "position": f"@{monitor['left']},{monitor['top']}",
+                    "full_details": monitor # Store raw details if needed
+                }
+                monitors.append(details)
+    except Exception as e:
+        print(f"Error getting monitor details: {e}")
+    return monitors
 
-            # Capture the screen
+def capture_screen_frame(monitor_number=1, quality=75, scale=1.0):
+    """
+    Captures a screenshot of the specified monitor, optionally scales it,
+    compresses it to JPEG, gets the current cursor position,
+    and returns (jpeg_bytes, cursor_position_tuple).
+    """
+    jpeg_bytes = None
+    cursor_pos = (0, 0) # Default cursor position
+
+    try:
+        # 1. Get cursor position FIRST (less chance of it changing during capture)
+        cursor_pos = pyautogui.position()
+
+        # 2. Capture screen using mss
+        with mss.mss() as sct:
+            # Ensure monitor_number is valid
+            if monitor_number >= len(sct.monitors):
+                print(f"[WARN] Monitor {monitor_number} not found. Using primary (monitor 1).")
+                monitor_number = 1 # Fallback to primary
+            if monitor_number == 0: # Monitor 0 is the full virtual screen
+                 print("[WARN] Monitor 0 selected (full virtual screen). Using primary (monitor 1) instead.")
+                 monitor_number = 1 # Fallback to primary monitor
+
+            monitor = sct.monitors[monitor_number]
             sct_img = sct.grab(monitor)
 
-            # Convert to PIL Image
+            # 3. Convert to PIL Image
             img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
 
-            # Compress to JPEG in memory
+            # 4. Scale the image if scale factor is not 1.0
+            scaled_img = img
+            if scale != 1.0 and 0.1 <= scale < 1.0:
+                try:
+                    new_width = int(img.width * scale)
+                    new_height = int(img.height * scale)
+                    # --- Revert to LANCZOS --- 
+                    try:
+                        resample_filter = Image.Resampling.LANCZOS # High quality
+                    except AttributeError:
+                        resample_filter = Image.LANCZOS # Fallback
+                    print(f"[UTILS capture] Resizing to {new_width}x{new_height} using {resample_filter}") # LOG
+                    scaled_img = img.resize((new_width, new_height), resample_filter)
+                except Exception as resize_err:
+                     print(f"[UTILS capture] Error resizing image: {resize_err}. Using original.") # LOG
+                     scaled_img = img
+            # elif scale != 1.0:
+            #      print(f"[WARN] Invalid scale factor {scale} ignored. Using 1.0.")
+
+            # 5. Compress the (potentially scaled) image to JPEG in memory
             img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='JPEG', quality=quality)
-            return img_byte_arr.getvalue()
+            # Ensure quality is within valid JPEG range (1-95 approx)
+            valid_quality = max(1, min(int(quality), 95))
+            scaled_img.save(img_byte_arr, format='JPEG', quality=valid_quality)
+            jpeg_bytes = img_byte_arr.getvalue()
+
+    except ImportError:
+         print("Error: Pillow, mss or PyAutoGUI not installed properly.")
+         # Return None or default image?
+    except IndexError:
+         print(f"Error: Monitor {monitor_number} does not exist.")
+         # Could try falling back to monitor 1
     except Exception as e:
-        print(f"Error capturing or compressing screenshot: {e}")
-        return None
+        print(f"Error capturing/processing screen frame: {e}")
+        # Optionally capture stack trace:
+        traceback.print_exc()
+        jpeg_bytes = None # Ensure jpeg_bytes is None on error
+        cursor_pos = (0, 0) # Reset cursor pos on error
+
+    # Return both, even if jpeg_bytes is None (signals an error)
+    return jpeg_bytes, cursor_pos
 
 # --- Input Simulation ---
 
+def simulate_input(event_data):
+    """Determines event type and calls the appropriate simulation function."""
+    event_type = event_data.get('type')
+    print(f"[UTILS simulate_input] Received: Type={event_type}, Data={event_data}") # LOG: Log entry
+    if event_type in ['move', 'press', 'release', 'scroll']:
+        simulate_mouse_event(event_data)
+    elif event_type in ['keypress', 'keyrelease']: # Keyboard event types
+        simulate_keyboard_event(event_data)
+    else:
+        print(f"[UTILS simulate_input] Unknown input event type received: {event_type}") # LOG: Log unknown type
+
 def simulate_mouse_event(event_data):
-    """Simulates mouse events based on received data using local screen size."""
+    """Simulates mouse events."""
     event_type = event_data['type']
-    # Get coordinates relative to the *remote* screen size sent by the controller
-    x = event_data['x'] 
-    y = event_data['y'] 
-    # We also need the dimensions of the screen *where the event occurred* (controller's view)
-    # This information is implicitly handled by get_scaled_coords in ui.py, which sends
-    # coordinates already scaled relative to the remote screen size.
-
+    x = event_data['x']
+    y = event_data['y']
     button = event_data.get('button')
-
-    # Get the actual screen size of the machine *running this code* (the host)
-    host_width, host_height = pyautogui.size()
-
-    # Since controller sends coords relative to remote screen, no further scaling needed here.
-    # We directly use x and y, but clamp them to the host screen bounds.
-    actual_x = max(0, min(x, host_width))
-    actual_y = max(0, min(y, host_height))
+    print(f"[UTILS simulate_mouse_event] Simulating: Type={event_type}, x={x}, y={y}, button={button}") # LOG: Log parameters
+    
+    try:
+        # Get screen info for all monitors - useful for debugging
+        with mss.mss() as sct:
+            for i, monitor in enumerate(sct.monitors):
+                print(f"[DEBUG] Monitor {i}: {monitor}")
+            
+            # Let's trust PyAutoGUI's coordinate system which handles multi-monitor setups
+            # This is a fundamental change from the prior approach
+            screen_width, screen_height = pyautogui.size()
+            
+            # Scale received coordinates to match the actual screen size
+            # This assumes the sender had correct relative coords (0-100%)
+            # Uncomment if your coordinates are being sent as percentages
+            # actual_x = int(x * screen_width)
+            # actual_y = int(y * screen_height)
+            
+            # Don't adjust coordinates - use as received
+            actual_x = int(x)
+            actual_y = int(y)
+            
+            print(f"[UTILS simulate_mouse_event] Using coordinates: ({actual_x}, {actual_y}) on screen size {screen_width}x{screen_height}") # Better log
+    except Exception as size_err:
+         print(f"[UTILS simulate_mouse_event] Error getting screen size: {size_err}") # LOG: Log error
+         traceback.print_exc()
+         return
 
     try:
+        # Use FAILSAFE=False to avoid crashes when mouse reaches screen edges
+        pyautogui.FAILSAFE = False
+        
         if event_type == 'move':
-            pyautogui.moveTo(actual_x, actual_y)
-        elif event_type == 'click': # Note: PyAutoGUI click needs press/release separated usually
-             # Sending press/release is more reliable
-             pyautogui.mouseDown(x=actual_x, y=actual_y, button=button)
-             pyautogui.mouseUp(x=actual_x, y=actual_y, button=button)
+            pyautogui.moveTo(actual_x, actual_y, duration=0)
+            print(f"[UTILS simulate_mouse_event] moveTo({actual_x}, {actual_y}) executed.") # LOG: Log success
         elif event_type == 'press':
-             pyautogui.mouseDown(x=actual_x, y=actual_y, button=button)
+            pyautogui.mouseDown(x=actual_x, y=actual_y, button=button)
+            print(f"[UTILS simulate_mouse_event] mouseDown({actual_x}, {actual_y}, button={button}) executed.") # LOG: Log success
         elif event_type == 'release':
-             pyautogui.mouseUp(x=actual_x, y=actual_y, button=button)
+            pyautogui.mouseUp(x=actual_x, y=actual_y, button=button)
+            print(f"[UTILS simulate_mouse_event] mouseUp({actual_x}, {actual_y}, button={button}) executed.") # LOG: Log success
         elif event_type == 'scroll':
             delta_x = event_data.get('delta_x', 0)
             delta_y = event_data.get('delta_y', 0)
-            if delta_y != 0:
-                pyautogui.scroll(delta_y // abs(delta_y) * 5 if delta_y else 0)
-            if delta_x != 0:
-                 pyautogui.hscroll(delta_x // abs(delta_x) * 5 if delta_x else 0)
-    except Exception as e:
-        print(f"Error simulating mouse event: {e}")
+            h_scroll_amount = 0
+            v_scroll_amount = 0
+            scroll_sensitivity = 5
+            if delta_x > 0: h_scroll_amount = max(1, delta_x // scroll_sensitivity)
+            elif delta_x < 0: h_scroll_amount = min(-1, delta_x // scroll_sensitivity)
+            if delta_y > 0: v_scroll_amount = max(1, delta_y // scroll_sensitivity)
+            elif delta_y < 0: v_scroll_amount = min(-1, delta_y // scroll_sensitivity)
 
+            if v_scroll_amount != 0:
+                pyautogui.scroll(v_scroll_amount, x=actual_x, y=actual_y)
+                print(f"[UTILS simulate_mouse_event] scroll({v_scroll_amount}) executed at ({actual_x}, {actual_y}).") # LOG: Log success
+            if h_scroll_amount != 0:
+                pyautogui.hscroll(h_scroll_amount, x=actual_x, y=actual_y)
+                print(f"[UTILS simulate_mouse_event] hscroll({h_scroll_amount}) executed at ({actual_x}, {actual_y}).") # LOG: Log success
+
+    except Exception as e:
+        print(f"[UTILS simulate_mouse_event] Error during PyAutoGUI call ({event_type}): {e}") # LOG: Log error
+        traceback.print_exc()
 
 def simulate_keyboard_event(event_data):
-    """Simulates keyboard events based on received data."""
+    """Simulates keyboard events."""
     event_type = event_data['type']
     key = event_data['key']
-
-    # Map Qt key names/codes to pyautogui names if necessary
-    # This is a simplified example; a more robust solution needs better mapping
-    key_map = {
-        '<ctrl>': 'ctrl',
-        '<alt>': 'alt',
-        '<shift>': 'shift',
-        '<enter>': 'enter',
-        '<tab>': 'tab',
-        '<space>': 'space',
-        '<backspace>': 'backspace',
-        '<delete>': 'delete',
-        '<esc>': 'esc',
-        '<up>': 'up',
-        '<down>': 'down',
-        '<left>': 'left',
-        '<right>': 'right',
-        # Add more mappings as needed
-    }
-    key_to_press = key_map.get(key.lower(), key) # Use mapping or original key
-
+    print(f"[UTILS simulate_keyboard_event] Simulating: Type={event_type}, Key={key}") # LOG: Log parameters
     try:
-        if event_type == 'press':
-            pyautogui.keyDown(key_to_press)
-        elif event_type == 'release':
-            pyautogui.keyUp(key_to_press)
+        if event_type == 'keypress':
+            pyautogui.keyDown(key)
+            print(f"[UTILS simulate_keyboard_event] keyDown('{key}') executed.") # LOG: Log success
+        elif event_type == 'keyrelease':
+            pyautogui.keyUp(key)
+            print(f"[UTILS simulate_keyboard_event] keyUp('{key}') executed.") # LOG: Log success
     except Exception as e:
-        # pyautogui might fail for some special keys or combinations
-        print(f"Error simulating keyboard event for key '{key_to_press}': {e}")
+        print(f"[UTILS simulate_keyboard_event] Error during PyAutoGUI call ({event_type} for key '{key}'): {e}") # LOG: Log error
+        traceback.print_exc()
 
 def get_local_ip():
     """Gets the local IP address of the machine."""
@@ -180,4 +271,4 @@ def get_local_ip():
 
 # Constants
 DEFAULT_PORT = 9999
-DEFAULT_QUALITY = 75 # JPEG quality 
+# DEFAULT_QUALITY = 75 # Moved defaults to MainWindow potentially 

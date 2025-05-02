@@ -3,15 +3,22 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QLineEdit, QGroupBox, QRadioButton, QDialog, QMessageBox,
     QScrollArea, QFormLayout, QMainWindow, QAction, QStatusBar, QTextEdit,
-    QSplitter
+    QSplitter, QSlider, QSpinBox, QComboBox, QCheckBox, QSizePolicy, QPlainTextEdit,
+    QSpacerItem # Import QSpacerItem
 )
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont, QPalette, QIcon
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
+import utils # Import utils to get monitor list
+import screeninfo # To get monitor info
 
 class LoginWindow(QWidget):
     """Window for user login."""
     # Signal emits backend_url, username, password
     login_attempt_signal = pyqtSignal(str, str, str)
+    toggle_theme_signal = pyqtSignal() # Signal to toggle theme
+    # Add signals for new buttons if needed later
+    # register_signal = pyqtSignal()
+    # guest_login_signal = pyqtSignal()
 
     def __init__(self, default_backend_url="http://127.0.0.1:8000"): # Default to localhost backend
         super().__init__()
@@ -19,84 +26,197 @@ class LoginWindow(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('Login - Remote Desktop')
-        layout = QVBoxLayout()
-        layout.setSpacing(15) # Add some spacing
+        self.setWindowTitle("SCU Remote Desktop - Login") # Changed title
+        self.setMinimumWidth(400) # Give it a bit more width
 
-        title_label = QLabel("Remote Desktop Login")
-        title_font = QFont()
-        title_font.setPointSize(16)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignCenter)
+        # --- Top Layout (for Title Bar elements) --- 
+        top_layout = QHBoxLayout()
+        top_layout.addStretch(1) # Push button to the right
 
-        backend_group = QGroupBox("Backend Server")
-        backend_layout = QHBoxLayout()
-        self.backend_label = QLabel("URL:")
-        self.backend_input = QLineEdit(self.default_backend_url)
-        self.backend_input.setPlaceholderText("Enter Backend API URL")
-        backend_layout.addWidget(self.backend_label)
-        backend_layout.addWidget(self.backend_input)
-        backend_group.setLayout(backend_layout)
+        # Theme Toggle Button
+        self.theme_button = QPushButton()
+        self.theme_button.setObjectName("theme_button")
+        self.theme_button.setToolTip("Toggle Light/Dark Mode")
+        self.theme_button.setFlat(True) # Make background transparent initially
+        self.theme_button.setCursor(Qt.PointingHandCursor)
+        
+        # Set initial size and styling for emoji
+        self.theme_button.setMinimumSize(35, 35)
+        font = self.theme_button.font()
+        font.setPointSize(14)  # Larger font for emoji
+        self.theme_button.setFont(font)
+        
+        # Initialize with the dark theme icon (sun emoji)
+        self._update_theme_icon("dark") # Assume starting dark
+        self.theme_button.clicked.connect(self.toggle_theme_signal.emit) # Emit signal
+        top_layout.addWidget(self.theme_button)
 
-        credentials_group = QGroupBox("Credentials")
-        credentials_layout = QFormLayout() # Use QFormLayout for labels and inputs
-        self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("Enter your username")
-        self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Enter your password")
-        self.password_input.setEchoMode(QLineEdit.Password) # Mask password
-        credentials_layout.addRow("Username:", self.username_input)
-        credentials_layout.addRow("Password:", self.password_input)
-        credentials_group.setLayout(credentials_layout)
+        # --- Main Content Layout --- 
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(30, 0, 30, 30) # Adjust margins
+        content_layout.setSpacing(15) # Add spacing between elements
 
-        self.login_button = QPushButton('Login')
+        # Logo Placeholder
+        self.logo_label = QLabel("SCU Logo Placeholder") # Placeholder
+        self.logo_label.setObjectName("logo_label") # Set object name
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        # --- Load actual logo --- 
+        pixmap = QPixmap('logo.png') 
+        if not pixmap.isNull():
+             # Scale the logo while keeping aspect ratio
+             self.logo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+             self.logo_label.setText("[Logo Not Found]") # Fallback text
+        # --- End Load actual logo --- 
+        content_layout.addWidget(self.logo_label)
+
+        # Title Labels
+        self.title_label1 = QLabel("SCU Remote Desktop")
+        self.title_label1.setObjectName("title_label1") # Set object name
+        self.title_label1.setAlignment(Qt.AlignCenter)
+        font1 = self.title_label1.font()
+        font1.setPointSize(14)
+        font1.setBold(True)
+        self.title_label1.setFont(font1)
+        content_layout.addWidget(self.title_label1)
+
+        self.title_label2 = QLabel("Remote Control System")
+        self.title_label2.setObjectName("title_label2") # Set object name
+        self.title_label2.setAlignment(Qt.AlignCenter)
+        font2 = self.title_label2.font()
+        font2.setPointSize(10)
+        self.title_label2.setFont(font2)
+        content_layout.addWidget(self.title_label2)
+
+        # Spacer
+        content_layout.addSpacing(20)
+
+        # Backend URL (Kept for now)
+        self.backend_label = QLabel("Backend URL:")
+        self.backend_label.setObjectName("backend_label")
+        self.backend_input = QLineEdit(self)
+        self.backend_input.setText(self.default_backend_url)
+        content_layout.addWidget(self.backend_label)
+        content_layout.addWidget(self.backend_input)
+
+        # Username
+        self.username_label = QLabel("Username:")
+        self.username_label.setObjectName("username_label")
+        self.username_input = QLineEdit(self)
+        content_layout.addWidget(self.username_label)
+        content_layout.addWidget(self.username_input)
+
+        # Password
+        self.password_label = QLabel("Password:")
+        self.password_label.setObjectName("password_label")
+        self.password_input = QLineEdit(self)
+        self.password_input.setEchoMode(QLineEdit.Password) 
+        self.password_input.setPlaceholderText("Enter your password") # Added placeholder
+        content_layout.addWidget(self.password_label)
+        content_layout.addWidget(self.password_input)
+
+        # Remember Me Checkbox
+        self.remember_checkbox = QCheckBox("Remember Me")
+        self.remember_checkbox.setObjectName("remember_checkbox")  # Set object name for styling
+        self.remember_checkbox.setChecked(False)  # Initially unchecked
+        self.remember_checkbox.stateChanged.connect(self.on_remember_me_changed)
+        content_layout.addWidget(self.remember_checkbox)
+        content_layout.addSpacing(10) # Spacer before buttons
+
+        # Login Button
+        self.login_button = QPushButton("Login", self)
+        self.login_button.setObjectName("login_button") # Set object name for styling
         self.login_button.clicked.connect(self.attempt_login)
-        # Allow login by pressing Enter in password field
-        self.password_input.returnPressed.connect(self.attempt_login)
+        self.login_button.setDefault(True) # Allow Enter key to trigger login
+        content_layout.addWidget(self.login_button)
 
-        self.status_label = QLabel("") # For showing login errors
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("color: red;")
+        # Register Button
+        self.register_button = QPushButton("Register", self)
+        self.register_button.setObjectName("register_button") # Set object name
+        self.register_button.clicked.connect(self.register_clicked)  # Connected to new handler
+        content_layout.addWidget(self.register_button)
+        
+        # Guest Login Button removed as requested
 
-        layout.addWidget(title_label)
-        layout.addWidget(backend_group)
-        layout.addWidget(credentials_group)
-        layout.addWidget(self.login_button)
-        layout.addWidget(self.status_label)
-        layout.addStretch()
+        # Error Label (Initially Hidden)
+        self.error_label = QLabel("", self)
+        self.error_label.setObjectName("error_label")
+        self.error_label.setAlignment(Qt.AlignCenter)
+        # self.error_label.setStyleSheet("color: #FF6B6B;") # Style using QSS file
+        content_layout.addWidget(self.error_label)
+        self.error_label.hide()
 
-        self.setLayout(layout)
-        self.resize(400, 300) # Adjust size as needed
-        self.show()
+        # --- Combine Layouts --- 
+        main_layout = QVBoxLayout(self) # Overall layout for the window
+        main_layout.setContentsMargins(0, 5, 0, 0) # Only top margin for top_layout
+        main_layout.addLayout(top_layout) # Add theme button layout at the top
+        main_layout.addLayout(content_layout) # Add main content below
+
+        # Set focus initially
+        self.username_input.setFocus()
+
+    # --- Method to update theme button icon --- 
+    def _update_theme_icon(self, theme_name):
+        if theme_name == "dark":
+            emoji = "☀️"  # Sun emoji for dark mode (switch to light)
+            tooltip = "Switch to Light Mode"
+        else:
+            emoji = "🌙"  # Moon emoji for dark mode (switch to dark) 
+            tooltip = "Switch to Dark Mode"
+            
+        # Set the text directly to the emoji
+        self.theme_button.setText(emoji)
+        self.theme_button.setIcon(QIcon())  # Clear any icon
+        self.theme_button.setToolTip(tooltip)
+        
+        # The font size is already set in CSS, but we'll ensure it's set here as well
+        # for systems that might override it
+        font = self.theme_button.font()
+        font.setPointSize(14)  # Larger font for emoji
+        self.theme_button.setFont(font)
 
     def attempt_login(self):
         backend_url = self.backend_input.text().strip()
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
-        if not backend_url or not username or not password:
-            self.status_label.setText("Please fill in all fields.")
+        if not backend_url or not username:
+            self.show_error("Backend URL and Username are required.")
             return
 
-        # Clear status and emit signal
-        self.status_label.setText("")
+        # Clear previous error
+        self.error_label.hide()
+        self.error_label.setText("")
+
         self.login_attempt_signal.emit(backend_url, username, password)
 
     def show_error(self, message):
-        """Displays an error message on the login window."""
-        self.status_label.setText(message)
-        # Re-enable button if needed (depends on main controller logic)
+        # Display error in the label instead of message box
+        self.error_label.setText(message)
+        self.error_label.show()
+        # Re-enable button
         self.login_button.setEnabled(True)
+        self.login_button.setText("Login")
 
     def set_logging_in(self):
-         """Disables input fields and button, shows 'Logging in...' status."""
-         self.backend_input.setEnabled(False)
-         self.username_input.setEnabled(False)
-         self.password_input.setEnabled(False)
-         self.login_button.setEnabled(False)
-         self.status_label.setStyleSheet("color: blue;")
-         self.status_label.setText("Logging in...")
+        # Disable button and show progress indication
+        self.login_button.setEnabled(False)
+        self.login_button.setText("Logging In...")
+        self.error_label.hide()
+
+    def on_remember_me_changed(self, state):
+        # This method is called when the state of the "Remember Me" checkbox changes
+        # You can implement the logic to save the checkbox state to a file or a database
+        # For example, you can use a configuration file to store the state
+        print(f"[UI LoginWindow] Remember Me checkbox toggled: {state}")
+        # Here, we'll just print the state
+
+    def register_clicked(self):
+        # Display a dialog or navigate to the registration page
+        # For now, just display a message that registration functionality is coming soon
+        QMessageBox.information(self, "Registration", "Registration functionality is coming soon!")
+        # In the future, this could emit a signal to open a registration form or dialog
+        # self.register_signal.emit()
 
 class InitialWindow(QWidget):
     """Window to choose between Host and Client mode."""
@@ -236,6 +356,7 @@ class ScreenDisplayWidget(QWidget):
         self._view_only = False
         self.setCursor(Qt.BlankCursor) # Hide local cursor
         self.remote_cursor_pos = None
+        self._fit_to_window = False # Add state for fit-to-window
 
     def set_view_only(self, view_only):
         self._view_only = view_only
@@ -265,27 +386,56 @@ class ScreenDisplayWidget(QWidget):
         self.remote_cursor_pos = (x, y)
         self.update() # Redraw to show cursor
 
+    def set_fit_to_window(self, fit):
+        """Sets the fit-to-window mode and triggers repaint."""
+        print(f"[UI ScreenDisplayWidget] Setting fit_to_window: {fit}") # LOG
+        if self._fit_to_window != fit:
+            self._fit_to_window = fit
+            self.updateGeometry() # May need size adjustment
+            self.update() # Request repaint
+
     def paintEvent(self, event):
-        """Draws the received screen image."""
         painter = QPainter(self)
         if not self.pixmap.isNull():
-            # --- Draw 1:1 - let ScrollArea handle size --- 
-            painter.drawPixmap(0, 0, self.pixmap) # Draw pixmap at its native size at origin
-            # Adjust widget size hint based on pixmap size - helps ScrollArea
-            # Check if size actually changed to avoid excessive updates
-            if self.minimumSize() != self.pixmap.size():
-                self.setMinimumSize(self.pixmap.size())
-            # --- End 1:1 Draw --- 
+            target_rect = self.rect()
+            pixmap_size = self.pixmap.size()
+            # LOG: Log paint event mode
+            # print(f"[UI ScreenDisplayWidget] paintEvent - Fit: {self._fit_to_window}, Widget Rect: {target_rect}, Pixmap Size: {pixmap_size}") 
 
-            # Draw the remote cursor if position is known and not view only
+            scaled_pixmap = self.pixmap # Assign default
+            x, y = 0, 0 # Default offsets
+
+            if self._fit_to_window:
+                # Scale pixmap to fit widget while preserving aspect ratio
+                scaled_pixmap = self.pixmap.scaled(target_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                x = (target_rect.width() - scaled_pixmap.width()) / 2
+                y = (target_rect.height() - scaled_pixmap.height()) / 2
+                painter.drawPixmap(int(x), int(y), scaled_pixmap)
+                # Ensure widget can shrink if needed when fitting
+                # self.setMinimumSize(1, 1) # Or something small?
+            else:
+                painter.drawPixmap(int(x), int(y), scaled_pixmap) # Draw at 0,0
+                if self.minimumSize() != pixmap_size:
+                    self.setMinimumSize(pixmap_size)
+
+            # Draw remote cursor
             if self.remote_cursor_pos and not self._view_only:
-                # Scale remote cursor position based on RECEIVED pixmap size vs ORIGINAL remote screen size
-                # This logic needs the original screen size from the sender if scaling is applied there.
-                # For now, assume remote_screen_size IS the size of the image we received (no scaling yet from sender)
-                cursor_display_x = int(self.remote_cursor_pos[0] * (self.pixmap.width() / self.remote_screen_size.width()) if self.remote_screen_size.width() > 0 else 0)
-                cursor_display_y = int(self.remote_cursor_pos[1] * (self.pixmap.height() / self.remote_screen_size.height()) if self.remote_screen_size.height() > 0 else 0)
+                cursor_display_x, cursor_display_y = 0, 0
+                if self._fit_to_window and pixmap_size.width() > 0 and pixmap_size.height() > 0 and scaled_pixmap.width() > 0 and scaled_pixmap.height() > 0:
+                    scale_ratio_x = scaled_pixmap.width() / pixmap_size.width()
+                    scale_ratio_y = scaled_pixmap.height() / pixmap_size.height()
+                    cursor_display_x = int(self.remote_cursor_pos[0] * scale_ratio_x + x)
+                    cursor_display_y = int(self.remote_cursor_pos[1] * scale_ratio_y + y)
+                else:
+                    # 1:1 calculation or if scaling failed
+                    cursor_display_x = int(self.remote_cursor_pos[0])
+                    cursor_display_y = int(self.remote_cursor_pos[1])
 
-                # Draw a simple crosshair or dot for the cursor
+                # Clamp cursor display coords to widget bounds for safety
+                cursor_display_x = max(0, min(cursor_display_x, target_rect.width() -1))
+                cursor_display_y = max(0, min(cursor_display_y, target_rect.height() -1))
+                
+                # Draw cursor
                 painter.setPen(QPen(Qt.red, 2))
                 painter.drawLine(cursor_display_x - 5, cursor_display_y, cursor_display_x + 5, cursor_display_y)
                 painter.drawLine(cursor_display_x, cursor_display_y - 5, cursor_display_x, cursor_display_y + 5)
@@ -298,19 +448,66 @@ class ScreenDisplayWidget(QWidget):
                 self.setMinimumSize(800, 600) 
         painter.end()
 
-    def get_scaled_coords(self, pos):
-         """Scales local widget coordinates (relative to view) to remote screen coordinates."""
-         # TEMPORARY SIMPLIFICATION: Assume 1:1 mapping when no scrollbars are active
-         # This might be wrong if scrollbars ARE active.
-         # If self.pixmap is not Null, coordinates are relative to the pixmap
-         if self.pixmap.isNull(): return 0, 0
-         x = pos.x()
-         y = pos.y()
+    def get_scaled_coords(self, widget_pos):
+         """ Converts widget coordinates to original remote screen coordinates. """
+         if self.pixmap.isNull() or self.pixmap.width() == 0 or self.pixmap.height() == 0:
+              # print("[get_scaled_coords] No pixmap or zero size.")
+              return 0, 0
          
-         # Clamp coordinates to pixmap bounds
-         x = max(0, min(x, self.pixmap.width()))
-         y = max(0, min(y, self.pixmap.height()))
-         return x, y
+         pixmap_size = self.pixmap.size()
+         widget_rect = self.rect()
+         widget_x = widget_pos.x()
+         widget_y = widget_pos.y()
+         
+         original_x = 0
+         original_y = 0
+
+         if self._fit_to_window:
+              # Calculate the size and position of the displayed pixmap (keeping aspect ratio)
+              scaled_pixmap = self.pixmap.scaled(widget_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+              scaled_width = scaled_pixmap.width()
+              scaled_height = scaled_pixmap.height()
+              offset_x = (widget_rect.width() - scaled_width) / 2
+              offset_y = (widget_rect.height() - scaled_height) / 2
+
+              # Check if click is within the bounds of the *displayed* pixmap
+              if scaled_width > 0 and scaled_height > 0 and \
+                 offset_x <= widget_x < offset_x + scaled_width and \
+                 offset_y <= widget_y < offset_y + scaled_height:
+                  
+                  # Calculate position relative to the top-left of the scaled pixmap
+                  x_in_scaled = widget_x - offset_x
+                  y_in_scaled = widget_y - offset_y
+                  
+                  # Convert back to original coordinates using the scaling ratio
+                  original_x = (x_in_scaled / scaled_width) * pixmap_size.width()
+                  original_y = (y_in_scaled / scaled_height) * pixmap_size.height()
+              else:
+                   # Click was outside the image area (in padding) - treat as edge case
+                   print("[get_scaled_coords Fit] Click outside image area.")
+                   # Return coords clamped to the original edge? Or (0,0)? Clamp for now.
+                   # Determine which edge is closest based on relative position
+                   rel_x = widget_x - offset_x
+                   rel_y = widget_y - offset_y
+                   if rel_x < 0: original_x = 0
+                   elif rel_x >= scaled_width: original_x = pixmap_size.width()
+                   else: original_x = (rel_x / scaled_width) * pixmap_size.width() # Should not happen based on outer check
+
+                   if rel_y < 0: original_y = 0
+                   elif rel_y >= scaled_height: original_y = pixmap_size.height()
+                   else: original_y = (rel_y / scaled_height) * pixmap_size.height()
+         else:
+              # 1:1 mode - Coordinates are relative to the widget origin
+              # Ensure click is within the pixmap bounds displayed at (0,0)
+              original_x = widget_x
+              original_y = widget_y
+
+         # Final clamp to ensure coords are within the original image dimensions
+         final_x = max(0, min(int(original_x), pixmap_size.width() - 1))
+         final_y = max(0, min(int(original_y), pixmap_size.height() - 1))
+         
+         # print(f"[get_scaled_coords] Fit:{self._fit_to_window}, Widget:{widget_x},{widget_y} -> Original:{final_x},{final_y}")
+         return final_x, final_y
 
     # --- Input Event Handlers ---
     def mouseMoveEvent(self, event):
@@ -441,184 +638,524 @@ class ScreenDisplayWidget(QWidget):
 # --- New Main Application Window ---
 class MainWindow(QMainWindow): # Inherit from QMainWindow for menus, status bar etc.
     """Main application window shown after login."""
-    connect_to_peer_signal = pyqtSignal(str) # Emits target UID
+    request_view_signal = pyqtSignal(str) # Renamed from connect_to_peer_signal
     disconnect_signal = pyqtSignal()
     send_chat_message_signal = pyqtSignal(str)
     logout_signal = pyqtSignal() # Signal for logout request
-    start_sharing_signal = pyqtSignal() # TEMPORARY
-    stop_sharing_signal = pyqtSignal()  # TEMPORARY
-    # Add more signals as needed for settings, screenshot etc.
+    start_sharing_signal = pyqtSignal() # Signal to request start sharing
+    stop_sharing_signal = pyqtSignal()  # Signal to request stop sharing
+    # Add signal for mouse permission
+    mouse_permission_signal = pyqtSignal(bool) # Emits boolean for allow/deny
+    # Add signals for stream settings
+    quality_changed_signal = pyqtSignal(int)
+    scale_changed_signal = pyqtSignal(int) # Emit percentage (25-100)
+    fps_changed_signal = pyqtSignal(int)
+    monitor_changed_signal = pyqtSignal(int) # Emit monitor index (1-based)
+    # Add theme toggle signal
+    toggle_theme_signal = pyqtSignal() # Signal to toggle theme
 
-    def __init__(self, username="Unknown User"): # Pass username for display
+    # Default stream settings
+    DEFAULT_QUALITY = 75
+    DEFAULT_SCALE = 100 # Percentage
+    DEFAULT_FPS = 15
+    DEFAULT_MONITOR_INDEX = 1 # Default to primary monitor
+    # Preset FPS values for ComboBox
+    FPS_OPTIONS = [5, 10, 15, 20, 25, 30]
+
+    def __init__(self, username="Unknown User", current_theme="dark"): # Pass username and theme
         super().__init__()
         self.username = username
-        self._create_actions() # Create menu/toolbar actions first
-        self._create_menu_bar() # Then create menus
-        self._create_status_bar() # Create status bar
-        self.initUI()
+        self.current_theme = current_theme  # Store current theme
+        # Store internal state for settings
+        self._current_quality = self.DEFAULT_QUALITY
+        self._current_scale = self.DEFAULT_SCALE
+        self._current_fps = self.DEFAULT_FPS
+        self._current_monitor_index = self.DEFAULT_MONITOR_INDEX
+        # Store the last base status message for FPS updates
+        self._last_base_status = "Ready"
+        self._last_displayed_fps = 0.0
 
-    def _create_actions(self):
-        # Placeholder for actions like Exit, Settings etc.
-        self.exit_action = QAction("&Exit", self)
-        self.exit_action.triggered.connect(self.close) # Use built-in close
-
-        self.logout_action = QAction("&Logout", self)
-        self.logout_action.triggered.connect(self.logout_signal.emit) # Emit signal on click
-
-    def _create_menu_bar(self):
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("&File")
-        file_menu.addAction(self.logout_action) # Add logout action
-        file_menu.addSeparator()
-        file_menu.addAction(self.exit_action)
-        # Add other menus (View, Tools, Help) later if needed
-
-    def _create_status_bar(self):
+        print("[DEBUG] Creating MainWindow with toolbar buttons only on the right side")
+        
+        # Setup UI
+        self.setWindowTitle(f"SCU Remote Desktop - {self.username}")
+        self.setMinimumSize(800, 600)
+        
+        # Create toolbar for theme toggle and logout (RIGHT SIDE ONLY)
+        toolbar = self.addToolBar("Theme")
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        
+        # Add spacer to push buttons to the right
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(spacer)
+        
+        # Theme Toggle Button (right side)
+        self.theme_button = QPushButton()
+        self.theme_button.setObjectName("theme_button")
+        self.theme_button.setToolTip("Toggle Light/Dark Mode")
+        self.theme_button.setFlat(True)
+        self.theme_button.setCursor(Qt.PointingHandCursor)
+        self.theme_button.setMinimumSize(35, 35)
+        
+        font = self.theme_button.font()
+        font.setPointSize(14)
+        self.theme_button.setFont(font)
+        
+        # Initialize with the current theme icon
+        self._update_theme_icon(self.current_theme)
+        self.theme_button.clicked.connect(self.toggle_theme_signal.emit)
+        toolbar.addWidget(self.theme_button)
+        
+        # Logout Button (right side)
+        self.toolbar_logout_button = QPushButton()
+        self.toolbar_logout_button.setObjectName("toolbar_logout_button")
+        self.toolbar_logout_button.setToolTip("Logout")
+        self.toolbar_logout_button.setFlat(True)
+        self.toolbar_logout_button.setCursor(Qt.PointingHandCursor)
+        self.toolbar_logout_button.setMinimumSize(35, 35)
+        
+        # Set icon from logout.png
+        self.toolbar_logout_button.setIcon(QIcon("logout.png"))
+        self.toolbar_logout_button.setIconSize(QSize(24, 24))
+        self.toolbar_logout_button.clicked.connect(self.logout_signal.emit)
+        toolbar.addWidget(self.toolbar_logout_button)
+        
+        # Create status bar
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Ready")
+        self.update_status("Initializing...")
+        
+        # Setup main UI components
+        self.initUI()
+        self.set_disconnected_state() # Initial state
 
     def initUI(self):
-        self.setWindowTitle(f'Remote Desktop - Logged in as {self.username}')
+        # Main central widget and layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QHBoxLayout(central_widget)
 
-        # --- Main Splitter --- 
-        main_splitter = QSplitter(Qt.Horizontal)
+        # --- Left Side: Screen Display --- 
+        screen_layout = QVBoxLayout()
 
-        # --- Left Side: Screen Display (as a container widget) --- 
-        left_container_widget = QWidget()
-        screen_layout = QVBoxLayout(left_container_widget)
-        screen_layout.setContentsMargins(0,0,0,0) # Remove margins if needed
-        screen_container_group = QGroupBox("Remote Screen") # Keep group box visually
-        screen_container_layout = QVBoxLayout()
-        self.screen_widget = ScreenDisplayWidget() 
-        scroll_area = QScrollArea()
-        scroll_area.setWidget(self.screen_widget)
-        scroll_area.setWidgetResizable(True)
-        screen_container_layout.addWidget(scroll_area)
-        screen_container_group.setLayout(screen_container_layout)
-        screen_layout.addWidget(screen_container_group)
-        main_splitter.addWidget(left_container_widget)
+        # --- Screen Display Widget --- 
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setBackgroundRole(QPalette.Dark) # Match dark theme potentially
+        self.scroll_area.setWidgetResizable(True)
+        
+        self.screen_display_widget = ScreenDisplayWidget(self) # Parent needed?
+        self.screen_display_widget.setObjectName("ScreenDisplayWidget") # Set object name
+        self.scroll_area.setWidget(self.screen_display_widget)
 
-        # --- Right Side: Controls and Chat (as a container widget) --- 
-        right_container_widget = QWidget()
-        right_panel_layout = QVBoxLayout(right_container_widget)
+        screen_layout.addWidget(self.scroll_area)
 
-        # Connection Controls
-        connection_group = QGroupBox("Connection")
+        # --- Fit to Window Checkbox --- 
+        self.fit_checkbox = QCheckBox("Fit to Window")
+        self.fit_checkbox.stateChanged.connect(self._toggle_fit_to_window)
+        screen_layout.addWidget(self.fit_checkbox, alignment=Qt.AlignRight)
+
+        # --- Right Side: Controls --- 
+        controls_layout = QVBoxLayout()
+        controls_layout.setSpacing(15)
+
+        # --- Connection GroupBox --- 
+        connection_groupbox = QGroupBox("Connection")
         connection_layout = QVBoxLayout()
-        self.connect_label = QLabel("Connect to User (UID):")
-        self.uid_input = QLineEdit()
-        self.uid_input.setPlaceholderText("Enter target user's ID")
-        self.connect_button = QPushButton("Connect")
-        self.disconnect_button = QPushButton("Disconnect")
-        self.disconnect_button.setEnabled(False) 
-        self.start_sharing_button = QPushButton("TEMP: Start Sharing Screen")
-        self.stop_sharing_button = QPushButton("TEMP: Stop Sharing Screen")
-        self.stop_sharing_button.setEnabled(False)
-        connection_layout.addWidget(self.connect_label)
-        connection_layout.addWidget(self.uid_input)
-        connection_layout.addWidget(self.connect_button)
-        connection_layout.addWidget(self.disconnect_button)
-        connection_layout.addWidget(self.start_sharing_button)
-        connection_layout.addWidget(self.stop_sharing_button)
-        connection_group.setLayout(connection_layout)
-        right_panel_layout.addWidget(connection_group)
 
-        # Chat Area (Placeholder)
-        chat_group = QGroupBox("Chat")
+        peer_layout = QHBoxLayout()
+        peer_layout.addWidget(QLabel("Peer UID:"))
+        self.peer_input = QLineEdit()
+        self.peer_input.setPlaceholderText("Enter Peer's Username")
+        peer_layout.addWidget(self.peer_input)
+        
+        self.request_view_button = QPushButton("Request View") # Renamed from Connect
+        self.request_view_button.setObjectName("request_view_button")
+        self.request_view_button.clicked.connect(self.on_request_view_clicked)
+        peer_layout.addWidget(self.request_view_button)
+
+        connection_layout.addLayout(peer_layout)
+
+        self.disconnect_button = QPushButton("Disconnect")
+        self.disconnect_button.setObjectName("disconnect_button")
+        self.disconnect_button.clicked.connect(self.disconnect_signal.emit) # Directly emit
+        self.disconnect_button.setEnabled(False) # Initially disabled
+        connection_layout.addWidget(self.disconnect_button)
+        
+        connection_groupbox.setLayout(connection_layout)
+        controls_layout.addWidget(connection_groupbox)
+
+        # --- Sharer Control GroupBox --- 
+        # Make the groupbox itself checkable
+        self.sharer_groupbox = QGroupBox("Share Your Screen")
+        self.sharer_groupbox.setCheckable(True)
+        self.sharer_groupbox.setChecked(False)
+        self.sharer_groupbox.toggled.connect(self.on_sharer_toggled) # Handle check changes
+        sharer_layout = QVBoxLayout()
+        self.sharer_groupbox.setLayout(sharer_layout)
+        self.sharer_groupbox.setEnabled(False) # Disabled until connected
+
+        # Start/Stop Buttons
+        sharing_buttons_layout = QHBoxLayout()
+        self.start_sharing_button = QPushButton("Start Sharing")
+        self.start_sharing_button.setObjectName("start_sharing_button")
+        self.start_sharing_button.clicked.connect(self.on_start_sharing_clicked)
+        self.start_sharing_button.setEnabled(False)
+        sharing_buttons_layout.addWidget(self.start_sharing_button)
+
+        self.stop_sharing_button = QPushButton("Stop Sharing")
+        self.stop_sharing_button.setObjectName("stop_sharing_button")
+        self.stop_sharing_button.clicked.connect(self.on_stop_sharing_clicked)
+        self.stop_sharing_button.setEnabled(False)
+        sharing_buttons_layout.addWidget(self.stop_sharing_button)
+        sharer_layout.addLayout(sharing_buttons_layout)
+        
+        # --- Settings inside Sharer GroupBox (Initially Hidden/Disabled) --- 
+        self.settings_groupbox = QGroupBox("Stream Settings")
+        self.settings_groupbox.setVisible(False) # Start hidden
+        self.settings_groupbox.setEnabled(False) # Start disabled
+        settings_layout = QFormLayout(self.settings_groupbox)
+        settings_layout.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        settings_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        settings_layout.setLabelAlignment(Qt.AlignLeft)
+        settings_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        # Monitor Selection
+        self.monitor_combobox = QComboBox()
+        self._populate_monitor_combobox() # Populate with available monitors
+        self.monitor_combobox.currentIndexChanged.connect(self._emit_monitor_index)
+        settings_layout.addRow("Monitor:", self.monitor_combobox)
+
+        # Quality Slider
+        quality_layout = QHBoxLayout()
+        self.quality_slider = QSlider(Qt.Horizontal)
+        self.quality_slider.setRange(10, 100)
+        self.quality_slider.setValue(self.DEFAULT_QUALITY)
+        self.quality_slider.setTickInterval(10)
+        self.quality_slider.setTickPosition(QSlider.TicksBelow)
+        self.quality_label = QLabel(f"{self.DEFAULT_QUALITY}%")
+        self.quality_slider.valueChanged.connect(self._update_quality_label_and_emit)
+        quality_layout.addWidget(self.quality_slider)
+        quality_layout.addWidget(self.quality_label)
+        settings_layout.addRow("Quality:", quality_layout)
+
+        # Scale Slider
+        scale_layout = QHBoxLayout()
+        self.scale_slider = QSlider(Qt.Horizontal)
+        self.scale_slider.setRange(25, 100)
+        self.scale_slider.setValue(self.DEFAULT_SCALE)
+        self.scale_slider.setTickInterval(25)
+        self.scale_slider.setTickPosition(QSlider.TicksBelow)
+        self.scale_label = QLabel(f"{self.DEFAULT_SCALE}%")
+        self.scale_slider.valueChanged.connect(self._update_scale_label_and_emit)
+        scale_layout.addWidget(self.scale_slider)
+        scale_layout.addWidget(self.scale_label)
+        settings_layout.addRow("Scale:", scale_layout)
+
+        # FPS ComboBox
+        self.fps_combobox = QComboBox()
+        for fps_option in self.FPS_OPTIONS:
+            self.fps_combobox.addItem(str(fps_option), userData=fps_option)
+        # Find and set the default FPS index
+        default_fps_index = self.fps_combobox.findData(self.DEFAULT_FPS)
+        if default_fps_index != -1:
+             self.fps_combobox.setCurrentIndex(default_fps_index)
+        self.fps_combobox.currentIndexChanged.connect(self._emit_fps_value)
+        settings_layout.addRow("Max FPS:", self.fps_combobox)
+
+        sharer_layout.addWidget(self.settings_groupbox)
+        controls_layout.addWidget(self.sharer_groupbox)
+
+        # --- Mouse Control Checkbox --- 
+        self.mouse_permission_checkbox = QCheckBox("Allow Peer Mouse Control")
+        self.mouse_permission_checkbox.setObjectName("mouse_permission_checkbox")
+        self.mouse_permission_checkbox.toggled.connect(self._toggle_mouse_permission)
+        self.mouse_permission_checkbox.setEnabled(False) # Disabled until connected
+        controls_layout.addWidget(self.mouse_permission_checkbox)
+
+        # --- Chat Area (Placeholder) --- 
+        chat_groupbox = QGroupBox("Chat")
         chat_layout = QVBoxLayout()
-        self.chat_display = QTextEdit()
+        self.chat_display = QPlainTextEdit()
         self.chat_display.setReadOnly(True)
-        self.chat_input = QLineEdit()
-        self.chat_input.setPlaceholderText("Type message and press Enter...")
-        self.chat_send_button = QPushButton("Send")
+        chat_layout.addWidget(self.chat_display)
+        
         chat_input_layout = QHBoxLayout()
+        self.chat_input = QLineEdit()
+        self.chat_input.setPlaceholderText("Enter chat message...")
+        self.chat_send_button = QPushButton("Send")
+        self.chat_send_button.clicked.connect(self.on_chat_send)
+        self.chat_input.returnPressed.connect(self.on_chat_send) # Send on Enter
         chat_input_layout.addWidget(self.chat_input)
         chat_input_layout.addWidget(self.chat_send_button)
-        chat_layout.addWidget(self.chat_display, 1)
         chat_layout.addLayout(chat_input_layout)
-        chat_group.setLayout(chat_layout)
-        right_panel_layout.addWidget(chat_group)
+        
+        chat_groupbox.setLayout(chat_layout)
+        controls_layout.addWidget(chat_groupbox) # Re-enabled chat section
+        controls_layout.addStretch() # Push controls to the top
 
-        right_panel_layout.addStretch() 
-        main_splitter.addWidget(right_container_widget)
+        # Add layouts to main layout
+        main_layout.addLayout(screen_layout, 75) # Screen takes 75% width
+        main_layout.addLayout(controls_layout, 25) # Controls take 25% width
 
-        # Set Splitter Ratios (optional initial sizing)
-        main_splitter.setStretchFactor(0, 3) # Index 0 (left) gets stretch factor 3
-        main_splitter.setStretchFactor(1, 1) # Index 1 (right) gets stretch factor 1
-        # Or set fixed sizes initially
-        # main_splitter.setSizes([800, 300]) 
+    # --- Helper methods for UI --- 
+    def _populate_monitor_combobox(self):
+        try:
+            monitors = screeninfo.get_monitors()
+            self.monitor_combobox.clear()
+            if not monitors:
+                self.monitor_combobox.addItem("No monitors found", userData=-1)
+                self.monitor_combobox.setEnabled(False)
+                return
 
-        # Set the splitter as the central widget
-        self.setCentralWidget(main_splitter)
+            for i, monitor in enumerate(monitors):
+                monitor_label = f"Monitor {i+1}: {monitor.width}x{monitor.height}"
+                if monitor.is_primary:
+                    monitor_label += " (Primary)"
+                self.monitor_combobox.addItem(monitor_label, userData=i + 1) # Use 1-based index for user data
+                
+            # Set default selection
+            if len(monitors) >= self.DEFAULT_MONITOR_INDEX:
+                 self.monitor_combobox.setCurrentIndex(self.DEFAULT_MONITOR_INDEX - 1) # 0-based index for setCurrentIndex
+            elif len(monitors) > 0:
+                 self.monitor_combobox.setCurrentIndex(0) # Fallback to first monitor
 
-        # --- Connect Signals --- 
-        self.connect_button.clicked.connect(self.on_connect_clicked)
-        self.disconnect_button.clicked.connect(self.disconnect_signal.emit)
-        self.chat_input.returnPressed.connect(self.on_chat_send)
-        self.chat_send_button.clicked.connect(self.on_chat_send)
-        self.start_sharing_button.clicked.connect(self.on_start_sharing_clicked)
-        self.stop_sharing_button.clicked.connect(self.on_stop_sharing_clicked)
+        except screeninfo.ScreenInfoError as e:
+            print(f"Could not get monitor info: {e}")
+            self.monitor_combobox.addItem("Error getting monitors", userData=-1)
+            self.monitor_combobox.setEnabled(False)
 
-        self.resize(1200, 700)
-        self.show()
+    def _emit_monitor_index(self, index):
+        monitor_index_data = self.monitor_combobox.itemData(index)
+        if monitor_index_data and monitor_index_data != -1:
+             print(f"[UI MainWindow] Monitor selection changed: Index {index}, UserData (1-based): {monitor_index_data}") # LOG
+             self.monitor_changed_signal.emit(monitor_index_data) # Emit 1-based index
 
-    def on_connect_clicked(self):
-        target_uid = self.uid_input.text().strip()
-        if target_uid:
-            self.connect_to_peer_signal.emit(target_uid)
-            # Disable connect UI during connection attempt
-            self.uid_input.setEnabled(False)
-            self.connect_button.setEnabled(False)
-            self.update_status(f"Attempting to connect to {target_uid}...")
+    def _update_quality_label_and_emit(self, value):
+        self.quality_label.setText(f"{value}%")
+        self.quality_changed_signal.emit(value)
+
+    def _update_scale_label_and_emit(self, value):
+        self.scale_label.setText(f"{value}%")
+        self.scale_changed_signal.emit(value)
+
+    def _emit_fps_value(self, index):
+        fps_data = self.fps_combobox.itemData(index)
+        if fps_data:
+            self.fps_changed_signal.emit(fps_data)
+
+    # --- Event Handlers --- 
+    def on_sharer_toggled(self, checked):
+        # This is triggered by USER clicking the checkbox OR programmatically
+        # We only want to trigger START/STOP if the USER clicked it.
+        # The actual start/stop is handled by start/stop button clicks now.
+        # This toggle can enable/disable the inner settings box.
+        print(f"[UI MainWindow] Sharer GroupBox toggled: {checked}") # LOG
+        # self.settings_groupbox.setVisible(checked)
+        # self.settings_groupbox.setEnabled(checked)
+        # If user UNCHECKS the box, signal stop sharing
+        # if not checked and self.stop_sharing_button.isEnabled():
+             # self.stop_sharing_signal.emit()
+        # If user CHECKS the box, signal start sharing
+        # elif checked and self.start_sharing_button.isEnabled():
+             # self.start_sharing_signal.emit()
+        pass # Let buttons handle start/stop
+
+    def on_request_view_clicked(self): # Renamed from on_connect_clicked
+        peer_uid = self.peer_input.text().strip()
+        if peer_uid:
+            self.request_view_signal.emit(peer_uid) # Emit renamed signal
+            # Disable button temporarily while request is in progress?
+            # self.request_view_button.setEnabled(False)
         else:
-            QMessageBox.warning(self, "Input Error", "Please enter the Target User ID.")
+            QMessageBox.warning(self, "Input Required", "Please enter a Peer UID to connect to.")
 
     def on_chat_send(self):
         message = self.chat_input.text().strip()
         if message:
+            # self.append_chat_message(f"Me: {message}") # Show own message immediately
             self.send_chat_message_signal.emit(message)
-            self.append_chat_message(f"Me: {message}") # Display own message
             self.chat_input.clear()
 
+    # --- Methods called by AppController --- 
     def append_chat_message(self, message):
-        self.chat_display.append(message)
+        self.chat_display.appendPlainText(message)
 
-    def update_status(self, status):
-        self.statusBar.showMessage(status)
+    def update_status(self, status, is_base_message=True):
+        """Updates the status bar message, preserving FPS if available."""
+        if is_base_message:
+            self._last_base_status = status # Store the new base status
+            
+        current_status = self._last_base_status
+        if self._last_displayed_fps > 0:
+            current_status += f" (Recv FPS: {self._last_displayed_fps:.1f})"
+
+        self.statusBar.showMessage(current_status)
+
+    # --- New Slot for FPS updates ---
+    def update_fps_display(self, fps):
+        """Updates the FPS part of the status bar message."""
+        self._last_displayed_fps = fps
+        # Update the full status bar text using the last base message
+        self.update_status(self._last_base_status, is_base_message=False)
+
+    # --- State Management Methods (called by AppController) ---
 
     def set_connected_state(self, connected_to_uid):
-        self.uid_input.setEnabled(False)
-        self.connect_button.setEnabled(False)
+        """Update UI state when connected to a peer."""
+        if not connected_to_uid:
+            # No UID means effectively disconnected
+            self.set_disconnected_state("Not connected to any peer.")
+            return
+            
+        # Update button states
+        self.request_view_button.setEnabled(False)
+        self.peer_input.setEnabled(False)
         self.disconnect_button.setEnabled(True)
-        self.update_status(f"Connected to {connected_to_uid}")
-        self.screen_widget.setFocus() # Allow screen widget to receive input
-
-    def set_disconnected_state(self, message="Ready"):
-        self.uid_input.setEnabled(True)
-        self.connect_button.setEnabled(True)
-        self.disconnect_button.setEnabled(False)
-        self.update_status(message)
-        self.screen_widget.pixmap = QPixmap() # Clear screen on disconnect
-        self.screen_widget.update()
-        self.chat_display.append("<i>--- Disconnected ---</i>")
-
-    # --- Methods to be called by the controller ---
-    def update_remote_screen(self, image_data):
-        self.screen_widget.update_screen(image_data)
-
-    def update_remote_cursor(self, x, y):
-        self.screen_widget.update_remote_cursor(x, y)
-
-    # --- TEMPORARY: Add handler methods for buttons ---
-    def on_start_sharing_clicked(self):
-        self.start_sharing_signal.emit()
-        self.start_sharing_button.setEnabled(False)
-        self.stop_sharing_button.setEnabled(True)
-
-    def on_stop_sharing_clicked(self):
-        self.stop_sharing_signal.emit()
+        
+        # Enable appropriate controls
+        self.sharer_groupbox.setEnabled(True)
+        self.sharer_groupbox.setChecked(False)
         self.start_sharing_button.setEnabled(True)
         self.stop_sharing_button.setEnabled(False)
-    # --- END TEMPORARY ---
+        self.settings_groupbox.setVisible(False)
+        self.settings_groupbox.setEnabled(False)
+        
+        # Enable mouse permission control
+        self.mouse_permission_checkbox.setEnabled(True)
+        
+        # Update status
+        self._last_base_status = f"Connected to {connected_to_uid}. Ready."
+        self.update_status(self._last_base_status)
+        self._last_displayed_fps = 0
+
+    def set_disconnected_state(self, message="Ready"):
+        """Reset UI state when disconnected from peer."""
+        # Reset connection controls
+        self.request_view_button.setEnabled(True)
+        self.peer_input.setEnabled(True)
+        self.disconnect_button.setEnabled(False)
+        
+        # Reset sharer controls
+        self.sharer_groupbox.setEnabled(False)
+        self.sharer_groupbox.setChecked(False)  # Uncheck
+        self.start_sharing_button.setEnabled(False)
+        self.stop_sharing_button.setEnabled(False)
+        self.settings_groupbox.setVisible(False)
+        self.settings_groupbox.setEnabled(False)
+        
+        # Reset mouse permission control
+        self.mouse_permission_checkbox.setEnabled(False)
+        self.mouse_permission_checkbox.setChecked(False)  # Uncheck
+        
+        # Set screen display to view-only
+        if hasattr(self, 'screen_display_widget') and self.screen_display_widget:
+            self.screen_display_widget.set_view_only(True)
+            print("[DEBUG UI] Set screen display to view-only mode on disconnect")
+        
+        # Update status bar
+        self._last_base_status = message # Remember status message for possible FPS overlay
+        # Use the provided message, or default to "Disconnected"
+        status_msg = message if message != "Ready" else "Disconnected. Ready."
+        self.update_status(status_msg)
+        self.screen_display_widget.update_screen(b'')
+        self._last_displayed_fps = 0
+
+
+    def set_sharing_state(self, is_sharing):
+        """Updates UI elements based on active sharing state."""
+        # Update check state of the main group box
+        self.sharer_groupbox.setChecked(is_sharing)
+
+        # Enable/Disable Start/Stop buttons
+        self.start_sharing_button.setEnabled(not is_sharing)
+        self.stop_sharing_button.setEnabled(is_sharing)
+
+        # Show/Hide and Enable/Disable the settings group box
+        self.settings_groupbox.setVisible(is_sharing)
+        self.settings_groupbox.setEnabled(is_sharing)
+
+        # Update status bar message
+        if is_sharing:
+             monitor_text = self.monitor_combobox.currentText()
+             self.update_status(f"Sharing {monitor_text}...")
+        else:
+             # Revert status
+             if self.disconnect_button.isEnabled():
+                  peer_uid = self.peer_input.text().strip()
+                  status_msg = f"Connected to {peer_uid}. Ready."
+                  if peer_uid == "": status_msg = "Connected. Ready."
+                  self.update_status(status_msg)
+             else:
+                  self.update_status("WebSocket Connected. Ready.")
+        self.update_fps_display(0)
+
+
+    def update_remote_screen(self, image_data):
+        """Pass image data to the display widget."""
+        self.screen_display_widget.update_screen(image_data)
+
+    def update_remote_cursor(self, x, y):
+        """Pass cursor data to the display widget."""
+        self.screen_display_widget.update_remote_cursor(x, y)
+
+
+    # --- Button Click Handlers ---
+    # These now primarily emit signals. AppController handles the logic & state updates.
+
+    def on_start_sharing_clicked(self):
+        # Emit signal regardless of checkbox state; controller verifies if allowed
+        self.start_sharing_signal.emit()
+        # Controller will call set_sharing_state(True) upon success
+
+
+    def on_stop_sharing_clicked(self):
+        # Emit signal regardless of checkbox state; controller verifies if allowed
+        self.stop_sharing_signal.emit()
+        # Controller will call set_sharing_state(False) upon success
+
+    def closeEvent(self, event):
+        """Handle window close event."""
+        self.logout_signal.emit() # Signal AppController to handle logout/cleanup
+        event.accept() # Close the window
+
+    # --- Slot for Fit Checkbox --- 
+    def _toggle_fit_to_window(self, state):
+        fit_enabled = (state == Qt.Checked)
+        print(f"[UI MainWindow] Fit to window toggled: {fit_enabled}") # LOG
+        self.screen_display_widget.set_fit_to_window(fit_enabled)
+        self.scroll_area.setWidgetResizable(fit_enabled) # Important for scrollarea behavior
+        if not fit_enabled:
+            self.screen_display_widget.adjustSize() # Ensure widget resizes for scrollbars
+            print("[UI MainWindow] Disabled fit, adjusted widget size.") # LOG
+        else:
+             # When fitting, ensure widget fills scroll area
+             self.screen_display_widget.setMinimumSize(1, 1) 
+             self.screen_display_widget.updateGeometry() # Trigger relayout
+
+    def _toggle_mouse_permission(self, state):
+        permission_enabled = (state == Qt.Checked)
+        print(f"[UI MainWindow] Mouse permission toggled: {permission_enabled}") # LOG
+        self.mouse_permission_signal.emit(permission_enabled)
+
+    # --- Method to update theme button icon --- 
+    def _update_theme_icon(self, theme_name):
+        if theme_name == "dark":
+            emoji = "☀️"  # Sun emoji for dark mode (switch to light)
+            tooltip = "Switch to Light Mode"
+        else:
+            emoji = "🌙"  # Moon emoji for dark mode (switch to dark) 
+            tooltip = "Switch to Dark Mode"
+            
+        # Set the text directly to the emoji
+        self.theme_button.setText(emoji)
+        self.theme_button.setIcon(QIcon())  # Clear any icon
+        self.theme_button.setToolTip(tooltip)
+        
+        # The font size is already set in CSS, but we'll ensure it's set here as well
+        # for systems that might override it
+        font = self.theme_button.font()
+        font.setPointSize(14)  # Larger font for emoji
+        self.theme_button.setFont(font)
 

@@ -1,0 +1,395 @@
+/* styles.qss - Navy Dark Theme */
+
+QWidget {
+    background-color: #1a2035; /* Dark navy background */
+    color: #f0f0f0; /* Light text */
+    font-family: Segoe UI, Arial, sans-serif; /* Consistent font */
+    font-size: 10pt;
+    /* Disable border on base QWidget to prevent double borders */
+    border: none;
+}
+
+QMainWindow {
+    background-color: #1a2035; /* Match main background */
+}
+
+QGroupBox {
+    background-color: #253046; /* Slightly lighter navy */
+    border: 1px solid #344566;
+    border-radius: 5px;
+    margin-top: 1ex; /* Space for title */
+    padding: 15px 10px 10px 10px; /* More padding top adjusted for title */
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left; /* Title on top left */
+    padding: 0 5px;
+    margin-left: 10px; /* Indent title slightly */
+    background-color: #344566;
+    color: #cccccc;
+    border-radius: 3px;
+}
+
+QPushButton {
+    background-color: #344566; /* Medium navy */
+    color: #ffffff;
+    border: 1px solid #455b82;
+    padding: 5px 15px;
+    border-radius: 4px;
+    min-height: 24px; /* Slightly taller buttons */
+}
+
+QPushButton:hover {
+    background-color: #455b82; /* Lighter navy on hover */
+    border: 1px solid #566d99;
+}
+
+QPushButton:pressed {
+    background-color: #273954; /* Darker navy when pressed */
+}
+
+QPushButton:disabled {
+    background-color: #202940;
+    color: #667085;
+    border: 1px solid #344566;
+}
+
+/* Special button styles for login page */
+QPushButton#login_button {
+    background-color: #3a6fbf; /* Blue instead of navy */
+    color: #ffffff;
+    font-weight: bold;
+    min-height: 30px; /* Taller than regular buttons */
+}
+
+QPushButton#login_button:hover {
+    background-color: #4a7fd0; /* Lighter blue on hover */
+}
+
+QPushButton#login_button:pressed {
+    background-color: #2a5fa9; /* Darker blue when pressed */
+}
+
+QPushButton#register_button {
+    background-color: #446a1f; /* Green color */
+    color: #ffffff;
+}
+
+QPushButton#register_button:hover {
+    background-color: #548a2f; /* Lighter green on hover */
+}
+
+QPushButton#guest_button {
+    background-color: #344566; /* Standard navy */
+    color: #d0d0d0; /* Slightly dimmer text */
+}
+
+QLineEdit, QTextEdit, QPlainTextEdit {
+    background-color: #283550;
+    color: #f0f0f0;
+    border: 1px solid #455b82; /* Medium navy border */
+    border-radius: 4px; /* More rounded corners for inputs */
+    padding: 5px; /* Slightly more padding */
+    min-height: 22px; /* Consistent height */
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+    border: 1px solid #5a89cf; /* Highlight focus with light blue */
+    background-color: #2d3c5c; /* Slightly lighter background when focused */
+}
+
+QLabel {
+    background-color: transparent; /* Labels usually transparent */
+    color: #f0f0f0;
+    border: none; /* Ensure labels don't get borders */
+    padding: 2px; /* Add slight padding for spacing */
+}
+
+/* Login Window specific title labels */
+QLabel#title_label1 {
+    color: #ffffff;
+    font-size: 14pt;
+    font-weight: bold;
+    padding: 5px;
+}
+
+QLabel#title_label2 {
+    color: #a0a0a0;
+    font-size: 10pt;
+    padding-bottom: 10px;
+}
+
+/* Error label in login form */
+QLabel#error_label {
+    color: #ff6b6b;
+    font-size: 9pt;
+    background-color: #2a2a42;
+    padding: 5px;
+    border-radius: 3px;
+}
+
+QCheckBox {
+    spacing: 5px; /* Space between checkbox and text */
+    background-color: transparent;
+    border: none;
+    color: #cccccc; /* Slightly lighter color for checkbox text */
+}
+
+QCheckBox::indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+}
+
+QCheckBox::indicator:unchecked {
+    border: 1px solid #455b82;
+    background-color: #202940;
+}
+
+QCheckBox::indicator:unchecked:hover {
+    border: 1px solid #566d99;
+}
+
+QCheckBox::indicator:checked {
+     background-color: #4a77cf; /* Blue color for checked */
+     border: 1px solid #3a67c9;
+     color: white; /* Text color for the checkmark */
+     image: url(checkmark.svg); /* Use checkmark image */
+     /* If image is unavailable, we'll use text checkmark in the code */
+}
+
+QCheckBox::indicator:checked:hover {
+     background-color: #5a87ef;
+     border: 1px solid #4a77cf;
+}
+
+QStatusBar {
+    background-color: #141c2b; /* Darker navy for status bar */
+    color: #cccccc;
+    border-top: 1px solid #344566; /* Add a subtle top border */
+}
+
+QStatusBar::item {
+    border: none; /* Remove borders between items */
+}
+
+
+QComboBox {
+    border: 1px solid #344566;
+    border-radius: 3px;
+    padding: 3px 10px 3px 5px;
+    background-color: #283550;
+    color: #f0f0f0;
+    min-width: 6em;
+    min-height: 20px; /* Consistent height */
+}
+
+QComboBox:hover {
+    border: 1px solid #455b82;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 15px;
+    border-left-width: 1px;
+    border-left-color: #344566;
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+/* Style for the dropdown arrow image could be added here */
+/* QComboBox::down-arrow { image: url(path/to/your/arrow.png); } */
+
+QComboBox QAbstractItemView { /* Style the dropdown list */
+    border: 1px solid #344566;
+    background-color: #253046;
+    color: #f0f0f0;
+    selection-background-color: #4a77cf; /* Blue selection */
+    padding: 2px;
+}
+
+QSlider::groove:horizontal {
+    border: 1px solid #344566;
+    height: 6px;
+    background: #253046;
+    margin: 2px 0;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #455b82;
+    border: 1px solid #566d99;
+    width: 16px;
+    height: 16px; /* Make it square-ish */
+    margin: -7px 0; /* Adjust vertical position */
+    border-radius: 8px; /* Make it round */
+}
+
+QSlider::handle:horizontal:hover {
+     background: #566d99;
+}
+
+QScrollArea {
+    border: none; /* Remove scroll area border if ScreenDisplayWidget has one */
+    background-color: transparent;
+}
+
+QScrollBar:vertical {
+    border: none;
+    background: #202940;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+}
+QScrollBar::handle:vertical {
+    background: #455b82;
+    min-height: 20px;
+    border-radius: 5px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #566d99;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    background: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QScrollBar:horizontal {
+    border: none;
+    background: #202940;
+    height: 10px;
+    margin: 0px 0px 0px 0px;
+}
+QScrollBar::handle:horizontal {
+    background: #455b82;
+    min-width: 20px;
+    border-radius: 5px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #566d99;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+    background: none;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+}
+
+/* Style the ScreenDisplayWidget specifically */
+/* Assuming ScreenDisplayWidget inherits QWidget and has object name set */
+ScreenDisplayWidget {
+    background-color: #0a1020; /* Very dark navy for screen background */
+    border: 1px solid #344566; /* Keep a border for clarity */
+}
+
+/* Theme toggle toolbar styling */
+QToolBar {
+    background-color: #1a2035; /* Match main background */
+    border: none;
+    spacing: 10px;
+}
+
+/* Theme toggle button on login page */
+QPushButton#theme_button {
+    background-color: transparent;
+    border: none;
+    padding: 2px;
+    border-radius: 17px;
+    min-width: 35px;
+    min-height: 35px;
+    font-size: 14pt; /* Ensure emoji displays at proper size */
+}
+
+QPushButton#theme_button:hover {
+    background-color: #2d3c5c;
+}
+
+/* Toolbar logout button */
+QPushButton#toolbar_logout_button {
+    background-color: transparent;
+    border: none;
+    padding: 2px;
+    border-radius: 17px;
+    min-width: 35px;
+    min-height: 35px;
+}
+
+QPushButton#toolbar_logout_button:hover {
+    background-color: #2d3c5c;
+}
+
+/* --- Chat Styling --- */
+QTextEdit#chat_display {
+    background-color: #1d263f;
+    border: 1px solid #344566;
+    border-radius: 5px;
+    padding: 5px;
+    selection-color: #ffffff;
+    selection-background-color: #344566;
+}
+
+QLineEdit#chat_input {
+    background-color: #283550;
+    border: 1px solid #455b82;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+QPushButton#chat_send_button {
+    background-color: #3a6fbf;
+    min-width: 60px;
+}
+
+/* --- Login Window Specific Styles --- */
+LoginWindow {
+    background-color: #1a2035; /* Match main background */
+}
+
+/* Style the labels within LoginWindow */
+LoginWindow QLabel#backend_label, 
+LoginWindow QLabel#username_label, 
+LoginWindow QLabel#password_label {
+    padding-bottom: 2px; /* Less bottom padding */
+    padding-top: 8px; /* More top padding */
+    font-size: 9pt; /* Slightly smaller labels */
+    color: #bbbbbb;
+}
+
+/* Logo placeholder specific styling */
+LoginWindow QLabel#logo_label { 
+     min-height: 100px; 
+     padding-bottom: 10px; /* Space below logo */
+}
+
+/* Title labels specific styling */
+LoginWindow QLabel#title_label1 {
+     font-size: 14pt;
+     font-weight: bold;
+     padding-bottom: 0px;
+}
+LoginWindow QLabel#title_label2 {
+     font-size: 10pt;
+     color: #aaaaaa; 
+     padding-top: 0px;
+     padding-bottom: 5px; /* Space below subtitle */
+}
+
+/* Input fields in LoginWindow */
+LoginWindow QLineEdit {
+     font-size: 11pt;
+     padding: 6px;
+     border-radius: 5px;
+     margin-bottom: 5px; /* Space below input fields */
+}
+
+/* Remember Me checkbox in LoginWindow */
+LoginWindow QCheckBox {
+     padding-top: 5px;
+     font-size: 9pt;
+} 
