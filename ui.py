@@ -1,14 +1,10 @@
 import sys
-import os
-import time
-import json
-import logging
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QLineEdit, QGroupBox, QRadioButton, QDialog, QMessageBox,
     QScrollArea, QFormLayout, QMainWindow, QAction, QStatusBar, QTextEdit,
     QSplitter, QSlider, QSpinBox, QComboBox, QCheckBox, QSizePolicy, QPlainTextEdit,
-    QSpacerItem, QFrame, QGridLayout, QListWidget, QListWidgetItem # Import QSpacerItem and QFrame
+    QSpacerItem, QFrame # Import QSpacerItem and QFrame
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QCursor, QFont, QPalette, QIcon, QPaintEvent, QMouseEvent, QWheelEvent , QKeyEvent , QPaintEvent 
 from PyQt5.QtCore import (
@@ -18,44 +14,29 @@ from PyQt5.QtCore import (
 # Removed utils import as it's not directly needed here anymore for monitors
 import screeninfo # To get monitor info
 import time
-from constants import (
-    DEFAULT_THEME, AVAILABLE_THEMES, STYLES_DIR, ICONS_DIR,
-    DEFAULT_STREAM_QUALITY, DEFAULT_STREAM_SCALE, DEFAULT_STREAM_FPS,
-    DEFAULT_MONITOR_INDEX, CONNECTION_STATUS
-)
 
 # --- Login Window ---
-class LoginWindow(QMainWindow):
+class LoginWindow(QWidget):
     """Window for user login."""
     # Signal emits backend_url, username, password
     login_attempt_signal = pyqtSignal(str, str, str)
     toggle_theme_signal = pyqtSignal() # Signal to toggle theme
-    # Signal for registration request
-    register_signal = pyqtSignal(str) # Emits backend_url for registration
+    # Modified: Signal for registration request now includes backend_url
+    register_signal = pyqtSignal(str)
 
     def __init__(self, default_backend_url="http://127.0.0.1:8000"): # Default to localhost backend
         super().__init__()
         self.default_backend_url = default_backend_url
         self._initUI() # Renamed internal method
-        self._load_saved_credentials()
 
     def _initUI(self):
         """Initializes the Login Window UI elements."""
         self.setWindowTitle("SCU Remote Desktop - Login")
         self.setMinimumWidth(400)
-        self.setMinimumHeight(600)  # Set minimum height
-        self.setStyleSheet(load_stylesheet(DEFAULT_THEME))
-
-        # Create central widget and main layout
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)  # Add margins
-        main_layout.setSpacing(15)  # Add spacing between elements
 
         # --- Top Layout (for Title Bar elements) ---
         top_layout = QHBoxLayout()
-        top_layout.addStretch(1)  # Push button to the right
+        top_layout.addStretch(1) # Push button to the right
 
         # Theme Toggle Button
         self.theme_button = QPushButton()
@@ -65,23 +46,27 @@ class LoginWindow(QMainWindow):
         self.theme_button.setCursor(Qt.PointingHandCursor)
         self.theme_button.setMinimumSize(35, 35)
         font_theme = self.theme_button.font()
-        font_theme.setPointSize(14)  # Larger font for emoji
+        font_theme.setPointSize(14) # Larger font for emoji
         self.theme_button.setFont(font_theme)
-        self._update_theme_icon("dark")  # Assume starting dark
-        self.theme_button.clicked.connect(self.toggle_theme_signal.emit)  # Emit signal
+        self._update_theme_icon("dark") # Assume starting dark
+        self.theme_button.clicked.connect(self.toggle_theme_signal.emit) # Emit signal
         top_layout.addWidget(self.theme_button)
-        main_layout.addLayout(top_layout)
+
+        # --- Main Content Layout ---
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(30, 0, 30, 30) # Adjust margins
+        content_layout.setSpacing(15) # Add spacing between elements
 
         # Logo Placeholder
         self.logo_label = QLabel("SCU Logo Placeholder")
         self.logo_label.setObjectName("logo_label")
         self.logo_label.setAlignment(Qt.AlignCenter)
-        pixmap = QPixmap('Icons/logo.png')  # TODO: Ensure Icons/logo.png is available
+        pixmap = QPixmap('Icons/logo.png') # TODO: Ensure Icons/logo.png is available
         if not pixmap.isNull():
             self.logo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
-            self.logo_label.setText("[Logo Not Found]")  # Fallback text
-        main_layout.addWidget(self.logo_label)
+            self.logo_label.setText("[Logo Not Found]") # Fallback text
+        content_layout.addWidget(self.logo_label)
 
         # Title Labels
         self.title_label1 = QLabel("SCU Remote Desktop")
@@ -91,7 +76,7 @@ class LoginWindow(QMainWindow):
         font1.setPointSize(14)
         font1.setBold(True)
         self.title_label1.setFont(font1)
-        main_layout.addWidget(self.title_label1)
+        content_layout.addWidget(self.title_label1)
 
         self.title_label2 = QLabel("Remote Control System")
         self.title_label2.setObjectName("title_label2")
@@ -99,26 +84,24 @@ class LoginWindow(QMainWindow):
         font2 = self.title_label2.font()
         font2.setPointSize(10)
         self.title_label2.setFont(font2)
-        main_layout.addWidget(self.title_label2)
+        content_layout.addWidget(self.title_label2)
 
-        main_layout.addSpacing(20)  # Spacer
-
-        # Form Layout for inputs
-        form_layout = QFormLayout()  # Changed from QVBoxLayout to QFormLayout
-        form_layout.setSpacing(10)
+        content_layout.addSpacing(20) # Spacer
 
         # Backend URL
         self.backend_label = QLabel("Backend URL:")
         self.backend_label.setObjectName("backend_label")
         self.backend_input = QLineEdit(self)
         self.backend_input.setText(self.default_backend_url)
-        form_layout.addRow(self.backend_label, self.backend_input)
+        content_layout.addWidget(self.backend_label)
+        content_layout.addWidget(self.backend_input)
 
         # Username
         self.username_label = QLabel("Username:")
         self.username_label.setObjectName("username_label")
         self.username_input = QLineEdit(self)
-        form_layout.addRow(self.username_label, self.username_input)
+        content_layout.addWidget(self.username_label)
+        content_layout.addWidget(self.username_input)
 
         # Password
         self.password_label = QLabel("Password:")
@@ -126,151 +109,54 @@ class LoginWindow(QMainWindow):
         self.password_input = QLineEdit(self)
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setPlaceholderText("Enter your password")
-        form_layout.addRow(self.password_label, self.password_input)
+        content_layout.addWidget(self.password_label)
+        content_layout.addWidget(self.password_input)
 
         # Remember Me Checkbox
-        self.remember_me_checkbox = QCheckBox("Remember Me")
-        self.remember_me_checkbox.setStyleSheet("""
-            QCheckBox {
-                color: #ffffff;
-                font-size: 14px;
-            }
+        self.remember_checkbox = QCheckBox("Remember Me")
+        self.remember_checkbox.setObjectName("remember_checkbox")
+        self.remember_checkbox.setChecked(False) # Initially unchecked
+        self.remember_checkbox.stateChanged.connect(self.on_remember_me_changed)
+        # Set custom checkmark SVG icon using stylesheet
+        self.remember_checkbox.setStyleSheet('''
             QCheckBox::indicator {
                 width: 20px;
                 height: 20px;
             }
-            QCheckBox::indicator:unchecked {
-                border: 2px solid #666666;
-                background-color: #2d2d2d;
-            }
             QCheckBox::indicator:checked {
-                border: 2px solid #0078d4;
-                background-color: #0078d4;
+                image: url(icons/checkmark.svg);
             }
-        """)
-        form_layout.addRow("", self.remember_me_checkbox)
-
-        main_layout.addLayout(form_layout)
-        main_layout.addSpacing(20)  # Spacer before buttons
-
-        # Button Layout
-        button_layout = QVBoxLayout()
-        button_layout.setSpacing(10)
+        ''')
+        content_layout.addWidget(self.remember_checkbox)
+        content_layout.addSpacing(10) # Spacer before buttons
 
         # Login Button
         self.login_button = QPushButton("Login", self)
         self.login_button.setObjectName("login_button")
         self.login_button.clicked.connect(self.attempt_login)
-        self.login_button.setDefault(True)  # Allow Enter key to trigger login
-        button_layout.addWidget(self.login_button)
+        self.login_button.setDefault(True) # Allow Enter key to trigger login
+        content_layout.addWidget(self.login_button)
 
-        # Register Button
-        self.register_button = QPushButton("Register", self)
+        # Sign Up Button (renamed from Register)
+        self.register_button = QPushButton("Sign Up", self)
         self.register_button.setObjectName("register_button")
-        self.register_button.clicked.connect(self.show_registration_window)
-        button_layout.addWidget(self.register_button)
-
-        main_layout.addLayout(button_layout)
+        self.register_button.clicked.connect(self._on_register_clicked)  # Connect to new handler
+        content_layout.addWidget(self.register_button)
 
         # Error Label (Initially Hidden)
         self.error_label = QLabel("", self)
         self.error_label.setObjectName("error_label")
         self.error_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(self.error_label)
+        content_layout.addWidget(self.error_label)
         self.error_label.hide()
 
-        main_layout.addStretch(1)  # Add stretch at the bottom
+        # --- Combine Layouts ---
+        main_layout = QVBoxLayout(self) # Overall layout for the window
+        main_layout.setContentsMargins(0, 5, 0, 0) # Only top margin for top_layout
+        main_layout.addLayout(top_layout) # Add theme button layout at the top
+        main_layout.addLayout(content_layout) # Add main content below
 
-        self.username_input.setFocus()  # Set initial focus
-
-    def _load_saved_credentials(self):
-        """Loads saved credentials if Remember Me was checked previously."""
-        # TODO (Backend): Replace with actual credential storage implementation
-        # This should be implemented using secure storage (e.g., keyring, encrypted file)
-        # For now, using a simple JSON file as placeholder
-        try:
-            with open("credentials.json", "r") as f:
-                data = json.load(f)
-                if data.get("remember_me", False):
-                    self.backend_input.setText(data.get("backend_url", ""))
-                    self.username_input.setText(data.get("username", ""))
-                    self.remember_me_checkbox.setChecked(True)
-        except FileNotFoundError:
-            pass
-
-    def set_logging_in(self):
-        """Updates the UI to show a logging in state."""
-        self.login_button.setEnabled(False)
-        self.login_button.setText("Logging in...")
-        self.register_button.setEnabled(False)
-        self.error_label.hide()
-
-    def _save_credentials(self):
-        """Saves credentials if Remember Me is checked."""
-        # TODO (Backend): Replace with secure credential storage implementation
-        if self.remember_me_checkbox.isChecked():
-            data = {
-                "backend_url": self.backend_input.text(),
-                "username": self.username_input.text(),
-                "remember_me": True
-            }
-            with open("credentials.json", "w") as f:
-                json.dump(data, f)
-        else:
-            # Clear saved credentials if Remember Me is unchecked
-            try:
-                os.remove("credentials.json")
-            except FileNotFoundError:
-                pass
-
-    def attempt_login(self):
-        """Handles login attempt."""
-        backend_url = self.backend_input.text().strip()
-        username = self.username_input.text().strip()
-        password = self.password_input.text()
-
-        # TODO (Backend): Add proper input validation
-        # - Validate backend_url format
-        # - Validate username format (e.g., length, allowed characters)
-        # - Validate password requirements (e.g., minimum length, complexity)
-        
-        if not backend_url or not username or not password:
-            self.show_error("Please fill in all fields")
-            return
-
-        # Save credentials if Remember Me is checked
-        self._save_credentials()
-
-        # TODO (Backend): Replace with actual authentication
-        # 1. Implement proper JWT token handling
-        # 2. Add secure password storage/hashing
-        # 3. Add proper error handling for different failure cases
-        # 4. Add rate limiting protection
-        # 5. Add session management
-        self.login_attempt_signal.emit(backend_url, username, password)
-
-    def show_registration_window(self):
-        """Shows registration window."""
-        backend_url = self.backend_input.text().strip()
-        if not backend_url:
-            self.show_error("Please enter backend URL first")
-            return
-
-        # TODO (Backend): Add registration window implementation
-        # 1. Create RegistrationWindow class
-        # 2. Add proper validation
-        # 3. Add proper error handling
-        # 4. Add proper success handling
-        self.register_signal.emit(backend_url)
-
-    def show_error(self, message):
-        """Displays an error message on the login screen."""
-        self.error_label.setText(message)
-        self.error_label.show()
-        # Re-enable button and reset text after error
-        self.login_button.setEnabled(True)
-        self.login_button.setText("Login")
-        self.register_button.setEnabled(True)
+        self.username_input.setFocus() # Set initial focus
 
     def _update_theme_icon(self, theme_name):
         """Updates the theme toggle button icon and tooltip."""
@@ -289,165 +175,67 @@ class LoginWindow(QMainWindow):
         font.setPointSize(14) # Larger font for emoji
         self.theme_button.setFont(font)
 
-# --- Registration Window ---
-class RegistrationWindow(QMainWindow):
-    """Window for user registration."""
-    # Signal emits backend_url, username, password, confirm_password
-    register_attempt_signal = pyqtSignal(str, str, str, str)
-    toggle_theme_signal = pyqtSignal()
-
-    def __init__(self, backend_url, current_theme="dark"):
-        super().__init__()
-        self.backend_url = backend_url
-        self.current_theme = current_theme
-        self._initUI()
-
-    def _initUI(self):
-        """Initializes the Registration Window UI elements."""
-        self.setWindowTitle("SCU Remote Desktop - Register")
-        self.setMinimumWidth(400)
-        self.setStyleSheet(load_stylesheet(self.current_theme))
-
-        # --- Top Layout (for Title Bar elements) ---
-        top_layout = QHBoxLayout()
-        top_layout.addStretch(1)
-
-        # Theme Toggle Button
-        self.theme_button = QPushButton()
-        self.theme_button.setObjectName("theme_button")
-        self.theme_button.setToolTip("Toggle Light/Dark Mode")
-        self.theme_button.setFlat(True)
-        self.theme_button.setCursor(Qt.PointingHandCursor)
-        self.theme_button.setMinimumSize(35, 35)
-        font_theme = self.theme_button.font()
-        font_theme.setPointSize(14)
-        self.theme_button.setFont(font_theme)
-        self._update_theme_icon(self.current_theme)
-        self.theme_button.clicked.connect(self.toggle_theme_signal.emit)
-        top_layout.addWidget(self.theme_button)
-
-        # --- Main Content Layout ---
-        content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(30, 0, 30, 30)
-        content_layout.setSpacing(15)
-
-        # Title Labels
-        self.title_label1 = QLabel("Create Account")
-        self.title_label1.setObjectName("title_label1")
-        self.title_label1.setAlignment(Qt.AlignCenter)
-        font1 = self.title_label1.font()
-        font1.setPointSize(14)
-        font1.setBold(True)
-        self.title_label1.setFont(font1)
-        content_layout.addWidget(self.title_label1)
-
-        content_layout.addSpacing(20)
-
-        # Username
-        self.username_label = QLabel("Username:")
-        self.username_label.setObjectName("username_label")
-        self.username_input = QLineEdit(self)
-        content_layout.addWidget(self.username_label)
-        content_layout.addWidget(self.username_input)
-
-        # Password
-        self.password_label = QLabel("Password:")
-        self.password_label.setObjectName("password_label")
-        self.password_input = QLineEdit(self)
-        self.password_input.setEchoMode(QLineEdit.Password)
-        content_layout.addWidget(self.password_label)
-        content_layout.addWidget(self.password_input)
-
-        # Confirm Password
-        self.confirm_password_label = QLabel("Confirm Password:")
-        self.confirm_password_label.setObjectName("confirm_password_label")
-        self.confirm_password_input = QLineEdit(self)
-        self.confirm_password_input.setEchoMode(QLineEdit.Password)
-        content_layout.addWidget(self.confirm_password_label)
-        content_layout.addWidget(self.confirm_password_input)
-
-        content_layout.addSpacing(10)
-
-        # Register Button
-        self.register_button = QPushButton("Register", self)
-        self.register_button.setObjectName("register_button")
-        self.register_button.clicked.connect(self.attempt_register)
-        self.register_button.setDefault(True)
-        content_layout.addWidget(self.register_button)
-
-        # Back to Login Button
-        self.back_button = QPushButton("Back to Login", self)
-        self.back_button.setObjectName("back_button")
-        self.back_button.clicked.connect(self.close)
-        content_layout.addWidget(self.back_button)
-
-        # Error Label
-        self.error_label = QLabel("", self)
-        self.error_label.setObjectName("error_label")
-        self.error_label.setAlignment(Qt.AlignCenter)
-        content_layout.addWidget(self.error_label)
-        self.error_label.hide()
-
-        # --- Combine Layouts ---
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 5, 0, 0)
-        main_layout.addLayout(top_layout)
-        main_layout.addLayout(content_layout)
-
-        self.username_input.setFocus()
-
-    def attempt_register(self):
-        """Validates input and emits register_attempt_signal."""
+    def attempt_login(self):
+        """Validates input and emits login_attempt_signal."""
+        backend_url = self.backend_input.text().strip()
         username = self.username_input.text().strip()
         password = self.password_input.text()
-        confirm_password = self.confirm_password_input.text()
 
-        if not username or not password or not confirm_password:
-            self.show_error("All fields are required.")
-            return
-
-        if password != confirm_password:
-            self.show_error("Passwords do not match.")
-            return
-
-        if len(password) < 8:
-            self.show_error("Password must be at least 8 characters long.")
+        if not backend_url or not username: # Basic validation
+            self.show_error("Backend URL and Username are required.")
             return
 
         # Clear previous error
         self.error_label.hide()
         self.error_label.setText("")
 
-        self.register_attempt_signal.emit(self.backend_url, username, password, confirm_password)
+        self.login_attempt_signal.emit(backend_url, username, password)
 
     def show_error(self, message):
-        """Displays an error message on the registration screen."""
+        """Displays an error message on the login screen."""
         self.error_label.setText(message)
         self.error_label.show()
-        self.register_button.setEnabled(True)
-        self.register_button.setText("Register")
+        # Re-enable button and reset text after error
+        self.login_button.setEnabled(True)
+        self.login_button.setText("Login")
 
-    def set_registering(self):
-        """Updates UI to show registering state."""
-        self.register_button.setEnabled(False)
-        self.register_button.setText("Registering...")
-        self.error_label.hide()
+    def set_logging_in(self):
+        """Updates UI to show 'logging in' state."""
+        self.login_button.setEnabled(False)
+        self.login_button.setText("Logging In...")
+        self.error_label.hide() # Hide error during attempt
 
-    def _update_theme_icon(self, theme_name):
-        """Updates the theme toggle button icon and tooltip."""
-        if theme_name == "dark":
-            emoji = "☀️"
-            tooltip = "Switch to Light Mode"
-        else:
-            emoji = "🌙"
-            tooltip = "Switch to Dark Mode"
+    def on_remember_me_changed(self, state):
+        """Handles state change of the 'Remember Me' checkbox."""
+        # TODO: Implement logic to save/load credentials securely if checked
+        print(f"[UI LoginWindow] Remember Me checkbox toggled: {state == Qt.Checked}")
 
-        self.theme_button.setText(emoji)
-        self.theme_button.setIcon(QIcon())
-        self.theme_button.setToolTip(tooltip)
-        font = self.theme_button.font()
-        font.setPointSize(14)
-        self.theme_button.setFont(font)
+    def _on_register_clicked(self):
+        """Handler for register button click that emits the signal with backend URL."""
+        backend_url = self.backend_input.text().strip()
+        self.register_signal.emit(backend_url)
+
+    def set_remembered_credentials(self, username, password):
+        """Set the username and password fields and check the Remember Me box."""
+        self.username_input.setText(username)
+        self.password_input.setText(password)
+        self.remember_checkbox.setChecked(True)
+
+    def get_remembered_credentials(self):
+        """Return the username and password if Remember Me is checked, else None."""
+        if self.remember_checkbox.isChecked():
+            return self.username_input.text(), self.password_input.text()
+        return None, None
+
+    def clear_remembered_credentials(self):
+        """Clear the username and password fields and uncheck Remember Me."""
+        self.username_input.clear()
+        self.password_input.clear()
+        self.remember_checkbox.setChecked(False)
+
+# --- REMOVED: InitialWindow and HostWindow classes ---
+# These classes were part of an older Host/Client connection model
+# and are not used in the new WebSocket/Backend architecture.
 
 # --- Screen Display Widget ---
 class ScreenDisplayWidget(QWidget):
@@ -739,17 +527,13 @@ class MainWindow(QMainWindow):
     fps_changed_signal = pyqtSignal(int) # Emitted from FPS combobox
     monitor_changed_signal = pyqtSignal(int) # Emitted from monitor combobox (1-based index)
     toggle_theme_signal = pyqtSignal() # Emitted from theme toggle button
-    # Add new signals for user list management
-    refresh_users_signal = pyqtSignal() # Emitted to refresh user list
-    user_selected_signal = pyqtSignal(str) # Emitted when user is selected from list
-    accept_connection_signal = pyqtSignal(str) # Emitted when connection is accepted
-    reject_connection_signal = pyqtSignal(str) # Emitted when connection is rejected
+    # toggle_fullscreen_signal = pyqtSignal() # Fullscreen is handled internally now
 
     # Default stream settings constants
-    DEFAULT_QUALITY = DEFAULT_STREAM_QUALITY
-    DEFAULT_SCALE = DEFAULT_STREAM_SCALE
-    DEFAULT_FPS = DEFAULT_STREAM_FPS
-    DEFAULT_MONITOR_INDEX = DEFAULT_MONITOR_INDEX
+    DEFAULT_QUALITY = 75
+    DEFAULT_SCALE = 100 # Percentage
+    DEFAULT_FPS = 15
+    DEFAULT_MONITOR_INDEX = 1 # Default to primary monitor (1-based)
     FPS_OPTIONS = [5, 10, 15, 20, 25, 30]
 
     # Peer Connection Status Constants (for UI state)
@@ -785,7 +569,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"SCU Remote Desktop - {self.username}")
         self.resize(1200, 768)
         self.setMinimumWidth(1000)
-        self.setStyleSheet(load_stylesheet(current_theme))
 
         # Create UI elements
         self._create_toolbar()
@@ -1046,85 +829,23 @@ class MainWindow(QMainWindow):
         connection_groupbox = QGroupBox("Connection")
         connection_groupbox.setObjectName("connection_groupbox")
         connection_layout = QVBoxLayout()
-        connection_layout.setSpacing(10)
-        
-        # Peer UID Input (Moved above users list)
         peer_layout = QHBoxLayout()
-        peer_layout.setSpacing(5)
         peer_layout.addWidget(QLabel("Peer UID:"))
         self.peer_input = QLineEdit()
-        self.peer_input.setObjectName("peer_input")  # Add object name for styling
         self.peer_input.setPlaceholderText("Enter Peer's Username")
-        self.peer_input.setReadOnly(False)
-        # Improved styling for the input field
-        self.peer_input.setStyleSheet("""
-            QLineEdit#peer_input {
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid #666666;
-                border-radius: 4px;
-                padding: 5px;
-                min-height: 25px;
-            }
-            QLineEdit#peer_input:focus {
-                border: 1px solid #0078d4;
-                background-color: #333333;
-            }
-            QLineEdit#peer_input:disabled {
-                background-color: #1a1a1a;
-                color: #888888;
-                border: 1px solid #444444;
-            }
-        """)
         peer_layout.addWidget(self.peer_input)
         connection_layout.addLayout(peer_layout)
-        
-        # Add Online Users List
-        users_groupbox = QGroupBox("Online Users")
-        users_groupbox.setObjectName("users_groupbox")
-        users_layout = QVBoxLayout()
-        users_layout.setSpacing(5)
-        
-        # User list widget
-        self.users_list = QListWidget()
-        self.users_list.setObjectName("users_list")
-        self.users_list.setSelectionMode(QListWidget.SingleSelection)
-        self.users_list.setMinimumHeight(150) # Set minimum height
-        self.users_list.setAlternatingRowColors(True) # Alternate row colors
-        self.users_list.itemClicked.connect(self._on_user_selected)
-        users_layout.addWidget(self.users_list)
-        
-        # Refresh button
-        refresh_button = QPushButton("Refresh")
-        refresh_button.setObjectName("refresh_users_button")
-        refresh_button.setToolTip("Refresh list of online users")
-        refresh_button.setIcon(QIcon("Icons/refresh.png")) # TODO: Add refresh icon
-        refresh_button.setIconSize(QSize(16, 16))
-        refresh_button.clicked.connect(self.refresh_users_signal.emit)
-        users_layout.addWidget(refresh_button)
-        
-        users_groupbox.setLayout(users_layout)
-        connection_layout.addWidget(users_groupbox)
-        
-        # Connection buttons
         buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(5)
-        self.request_view_button = QPushButton("Connect")
-        self.request_view_button.setObjectName("connect_button")
+        self.request_view_button = QPushButton("Connect") # Renamed button
+        self.request_view_button.setObjectName("connect_button") # For potential specific styling
         self.request_view_button.setToolTip("Request to view peer's screen")
-        self.request_view_button.setIcon(QIcon("Icons/connect.png")) # TODO: Add connect icon
-        self.request_view_button.setIconSize(QSize(16, 16))
-        self.request_view_button.clicked.connect(self.on_request_view_clicked)
+        self.request_view_button.clicked.connect(self.on_request_view_clicked) # Connects to handler
         buttons_layout.addWidget(self.request_view_button)
-        
         self.disconnect_button = QPushButton("Disconnect")
         self.disconnect_button.setObjectName("disconnect_button")
         self.disconnect_button.setToolTip("Disconnect from current peer")
-        self.disconnect_button.setIcon(QIcon("Icons/disconnect.png")) # TODO: Add disconnect icon
-        self.disconnect_button.setIconSize(QSize(16, 16))
-        self.disconnect_button.clicked.connect(self.disconnect_signal.emit)
+        self.disconnect_button.clicked.connect(self.disconnect_signal.emit) # Emit signal
         buttons_layout.addWidget(self.disconnect_button)
-        
         connection_layout.addLayout(buttons_layout)
         connection_groupbox.setLayout(connection_layout)
         sidebar_content_layout.addWidget(connection_groupbox)
@@ -1551,54 +1272,12 @@ class MainWindow(QMainWindow):
     def on_request_view_clicked(self):
         """Handles click on the 'Connect' button."""
         peer_uid = self.peer_input.text().strip()
-        if not peer_uid:
-            QMessageBox.warning(self, "Input Required", "Please enter a peer UID to connect to.")
-            return
-            
-        if peer_uid == self.username:
-            QMessageBox.warning(self, "Invalid Selection", "Cannot connect to yourself.")
-            return
-            
-        # Set connecting status
-        self.set_peer_connection_status(self.PEER_STATUS_CONNECTING)
-        self.request_view_button.setEnabled(False)
-        self.disconnect_button.setEnabled(True)
-        
-        # Emit signal to controller
-        self.request_view_signal.emit(peer_uid)
-        
-        # Show status message
-        self.show_status_message(f"Requesting connection to {peer_uid}...")
-
-    def handle_connection_request(self, from_uid):
-        """Handles incoming connection request from another user."""
-        reply = QMessageBox.question(
-            self,
-            "Connection Request",
-            f"User {from_uid} wants to connect to your screen. Allow connection?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            self.show_status_message(f"Accepted connection from {from_uid}")
-            # Emit signal to accept connection
-            self.accept_connection_signal.emit(from_uid)
+        if peer_uid:
+            # Emit signal to controller to handle the request logic
+            self.request_view_signal.emit(peer_uid)
+            # Controller should update UI state (e.g., set connecting status)
         else:
-            self.show_status_message(f"Rejected connection from {from_uid}")
-            # Emit signal to reject connection
-            self.reject_connection_signal.emit(from_uid)
-
-    def start_auto_refresh(self):
-        """Starts automatic refresh of online users list."""
-        self.refresh_timer = QTimer(self)
-        self.refresh_timer.timeout.connect(self.refresh_users_signal.emit)
-        self.refresh_timer.start(5000)  # Refresh every 5 seconds
-
-    def stop_auto_refresh(self):
-        """Stops automatic refresh of online users list."""
-        if hasattr(self, 'refresh_timer'):
-            self.refresh_timer.stop()
+            QMessageBox.warning(self, "Input Required", "Please enter a Peer Username to connect to.")
 
     def _toggle_fit_to_window(self, state):
         """Handles the 'Fit to Window' checkbox state change."""
@@ -1761,89 +1440,188 @@ class MainWindow(QMainWindow):
         self.logout_signal.emit() # Signal AppController to handle cleanup
         event.accept() # Allow window to close
 
-    def _on_user_selected(self, item):
-        """Handles user selection from the online users list."""
-        if item:
-            # Extract username from the item text (remove status indicator)
-            selected_uid = item.text().split(" ", 1)[1]
-            self.peer_input.setText(selected_uid)
-            self.user_selected_signal.emit(selected_uid)
+class RegistrationWindow(QWidget):
+    """Window for user registration (sign up)."""
+    # Signal emits username, password, confirm_password (backend_url removed)
+    register_attempt_signal = pyqtSignal(str, str, str)
+    toggle_theme_signal = pyqtSignal()  # Signal to toggle theme
 
-    def update_users_list(self, users):
-        """Updates the online users list with the provided users."""
-        self.users_list.clear()
-        for user in users:
-            if user != self.username:  # Don't show self in the list
-                item = QListWidgetItem(user)
-                # Add status indicator
-                status = "🟢"  # Green dot for online
-                item.setText(f"{status} {user}")
-                self.users_list.addItem(item)
+    def __init__(self, default_backend_url="http://127.0.0.1:8000", current_theme="dark"):
+        super().__init__()
+        self.default_backend_url = default_backend_url
+        self.current_theme = current_theme
+        self._initUI()
 
-    def handle_connection_timeout(self):
-        """Handles connection timeout."""
-        self.set_peer_connection_status(self.PEER_STATUS_DISCONNECTED)
-        self.request_view_button.setEnabled(True)
-        self.disconnect_button.setEnabled(False)
-        self.show_status_message("Connection attempt timed out")
-        QMessageBox.warning(self, "Connection Timeout", "The connection attempt timed out. Please try again.")
-        
-        # TODO: API Integration
-        # 1. Implement proper timeout handling from API
-        # 2. Add retry mechanism
-        # 3. Add connection status polling
+    def _initUI(self):
+        """Initializes the Registration Window UI elements."""
+        self.setWindowTitle("SCU Remote Desktop - Sign Up")
+        self.setMinimumWidth(400)
 
-    def handle_connection_error(self, error_message):
-        """Handles connection errors."""
-        self.set_peer_connection_status(self.PEER_STATUS_DISCONNECTED)
-        self.request_view_button.setEnabled(True)
-        self.disconnect_button.setEnabled(False)
-        self.show_status_message(f"Connection error: {error_message}")
-        QMessageBox.critical(self, "Connection Error", f"Failed to connect: {error_message}")
-        
-        # TODO: API Integration
-        # 1. Implement proper error handling from API
-        # 2. Add error categorization
-        # 3. Add error recovery mechanisms
-        # 4. Add error logging
+        # --- Top Layout (for Title Bar elements) ---
+        top_layout = QHBoxLayout()
+        top_layout.addStretch(1)  # Push button to the right
 
-    def handle_connection_refused(self, reason=""):
-        """Handles connection refusal."""
-        self.set_peer_connection_status(self.PEER_STATUS_DISCONNECTED)
-        self.request_view_button.setEnabled(True)
-        self.disconnect_button.setEnabled(False)
-        message = f"Connection refused{f': {reason}' if reason else ''}"
-        self.show_status_message(message)
-        QMessageBox.information(self, "Connection Refused", message)
-        
-        # TODO: API Integration
-        # 1. Implement proper refusal handling from API
-        # 2. Add refusal reason parsing
-        # 3. Add retry options
-        # 4. Add user notification preferences
+        # Theme Toggle Button
+        self.theme_button = QPushButton()
+        self.theme_button.setObjectName("theme_button")
+        self.theme_button.setToolTip("Toggle Light/Dark Mode")
+        self.theme_button.setFlat(True)
+        self.theme_button.setCursor(Qt.PointingHandCursor)
+        self.theme_button.setMinimumSize(35, 35)
+        font_theme = self.theme_button.font()
+        font_theme.setPointSize(14)
+        self.theme_button.setFont(font_theme)
+        self._update_theme_icon("dark")
+        self.theme_button.clicked.connect(self.toggle_theme_signal.emit)
+        top_layout.addWidget(self.theme_button)
 
-def load_stylesheet(theme):
-    """Loads the stylesheet for the specified theme."""
-    filename = os.path.join(STYLES_DIR, f"{theme}.qss")
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        logging.warning(f"Stylesheet file '{filename}' not found.")
-        return ""
-    except Exception as e:
-        logging.error(f"Failed to load stylesheet '{filename}': {e}")
-        return ""
+        # --- Main Content Layout ---
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(30, 0, 30, 30)
+        content_layout.setSpacing(15)
 
-# --- Main Execution Guard (Optional for UI file, but good practice) ---
-# if __name__ == '__main__':
-#     app = QApplication(sys.argv)
-#
-#     # Example Usage (for testing UI components standalone)
-#     # login_win = LoginWindow()
-#     # login_win.show()
-#
-#     main_win = MainWindow(username="TestUser")
-#     main_win.show()
-#
-#     sys.exit(app.exec_())
+        # Logo
+        self.logo_label = QLabel("SCU Logo")
+        self.logo_label.setObjectName("logo_label")
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        pixmap = QPixmap('Icons/logo.png')
+        if not pixmap.isNull():
+            self.logo_label.setPixmap(pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.logo_label.setText("[Logo Not Found]")
+        content_layout.addWidget(self.logo_label)
+
+        # Title Labels
+        self.title_label1 = QLabel("Create Account")
+        self.title_label1.setObjectName("title_label1")
+        self.title_label1.setAlignment(Qt.AlignCenter)
+        font1 = self.title_label1.font()
+        font1.setPointSize(14)
+        font1.setBold(True)
+        self.title_label1.setFont(font1)
+        content_layout.addWidget(self.title_label1)
+
+        content_layout.addSpacing(20)
+
+        # Username
+        self.username_label = QLabel("Username:")
+        self.username_label.setObjectName("username_label")
+        self.username_input = QLineEdit(self)
+        self.username_input.setPlaceholderText("Choose a username")
+        content_layout.addWidget(self.username_label)
+        content_layout.addWidget(self.username_input)
+
+        # Password
+        self.password_label = QLabel("Password:")
+        self.password_label.setObjectName("password_label")
+        self.password_input = QLineEdit(self)
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setPlaceholderText("Choose a password")
+        content_layout.addWidget(self.password_label)
+        content_layout.addWidget(self.password_input)
+
+        # Confirm Password
+        self.confirm_password_label = QLabel("Confirm Password:")
+        self.confirm_password_label.setObjectName("confirm_password_label")
+        self.confirm_password_input = QLineEdit(self)
+        self.confirm_password_input.setEchoMode(QLineEdit.Password)
+        self.confirm_password_input.setPlaceholderText("Re-enter your password")
+        content_layout.addWidget(self.confirm_password_label)
+        content_layout.addWidget(self.confirm_password_input)
+
+        # TODO: Add additional registration fields as needed
+        # For example: Email, Full Name, etc.
+
+        content_layout.addSpacing(10)
+
+        # Sign Up Button
+        self.register_button = QPushButton("Create Account", self)
+        self.register_button.setObjectName("register_button")
+        self.register_button.clicked.connect(self.attempt_registration)
+        self.register_button.setDefault(True)
+        content_layout.addWidget(self.register_button)
+
+        # Error Label (Initially Hidden)
+        self.error_label = QLabel("", self)
+        self.error_label.setObjectName("error_label")
+        self.error_label.setAlignment(Qt.AlignCenter)
+        content_layout.addWidget(self.error_label)
+        self.error_label.hide()
+
+        # --- Combine Layouts ---
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 5, 0, 0)
+        main_layout.addLayout(top_layout)
+        main_layout.addLayout(content_layout)
+
+        self.username_input.setFocus()
+
+    def _update_theme_icon(self, theme_name):
+        """Updates the theme toggle button icon and tooltip."""
+        if theme_name == "dark":
+            emoji = "☀️"  # Sun emoji for dark mode (switch to light)
+            tooltip = "Switch to Light Mode"
+        else:
+            emoji = "🌙"  # Moon emoji for light mode (switch to dark)
+            tooltip = "Switch to Dark Mode"
+
+        self.theme_button.setText(emoji)
+        self.theme_button.setIcon(QIcon())
+        self.theme_button.setToolTip(tooltip)
+        font = self.theme_button.font()
+        font.setPointSize(14)
+        self.theme_button.setFont(font)
+
+    def attempt_registration(self):
+        """Validates input and emits register_attempt_signal."""
+        # Get input values
+        username = self.username_input.text().strip()
+        password = self.password_input.text()
+        confirm_password = self.confirm_password_input.text()
+
+        # Basic validation
+        if not username:
+            self.show_error("Username is required.")
+            return
+
+        if not password:
+            self.show_error("Password is required.")
+            return
+
+        if password != confirm_password:
+            self.show_error("Passwords do not match.")
+            return
+
+        # No minimum password length check
+
+        # TODO: Add more validation as needed
+        # - Check username format (allowed characters, length)
+        # - Check password strength (complexity requirements)
+        # - Validate email format if added
+        # - etc.
+
+        # Clear previous error
+        self.error_label.hide()
+        self.error_label.setText("")
+
+        # Disable button and change text
+        self.set_registering()
+
+        # Emit signal to controller (no backend_url)
+        self.register_attempt_signal.emit(username, password, confirm_password)
+
+    def show_error(self, message):
+        """Displays an error message on the registration screen."""
+        self.error_label.setText(message)
+        self.error_label.show()
+        # Re-enable button and reset text
+        self.register_button.setEnabled(True)
+        self.register_button.setText("Create Account")
+
+    def set_registering(self):
+        """Updates UI to show 'registering' state."""
+        self.register_button.setEnabled(False)
+        self.register_button.setText("Creating Account...")
+        self.error_label.hide()
+
+# --- REMOVED: InitialWindow and HostWindow classes ---

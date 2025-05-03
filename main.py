@@ -40,7 +40,7 @@ from websocket_handler import WebSocketHandler # Import WebSocketHandler
 # --- Function to load stylesheet ---
 def load_stylesheet(theme_name="dark"):
     """Loads and returns the content of a QSS file based on theme name."""
-    base_filename = f"{theme_name}_styles.qss" if theme_name == "light" else "styles.qss"
+    base_filename = "light_styles.qss" if theme_name == "light" else "styles.qss"
     filename = f"styles/{base_filename}" # Prepend the directory
     logging.debug(f"[DEBUG] Attempting to load stylesheet: {filename}")
     try:
@@ -142,31 +142,73 @@ class AppController(QObject):
             self.login_window = ui.LoginWindow()
             self.login_window.login_attempt_signal.connect(self.handle_login_attempt)
             self.login_window.toggle_theme_signal.connect(self.toggle_theme)
-            self.login_window.register_signal.connect(self.show_registration_window)
+            self.login_window.register_signal.connect(lambda _: self.show_registration_window())
+            # Load remembered credentials if available
+            self._load_remembered_credentials()
         else:
             # Reset login button state if window already exists
             self.login_window.login_button.setEnabled(True)
             self.login_window.login_button.setText("Login")
             self.login_window.register_button.setEnabled(True)
             self.login_window.error_label.hide()
-            
+            # Also reload remembered credentials if window is reused
+            self._load_remembered_credentials()
         self.login_window._update_theme_icon(self.current_theme)
         self.login_window.show()
 
-    def show_registration_window(self, backend_url):
+    def _load_remembered_credentials(self):
+        """Load credentials from credentials.json and pre-fill the login form if Remember Me was checked."""
+        import os, json
+        cred_path = os.path.join(os.path.dirname(__file__), 'credentials.json')
+        if os.path.exists(cred_path):
+            try:
+                with open(cred_path, 'r') as f:
+                    data = json.load(f)
+                username = data.get('username', '')
+                password = data.get('password', '')
+                remember = data.get('remember', False)
+                if remember and username and password:
+                    self.login_window.set_remembered_credentials(username, password)
+                else:
+                    self.login_window.clear_remembered_credentials()
+            except Exception as e:
+                logging.warning(f"Failed to load credentials: {e}")
+                self.login_window.clear_remembered_credentials()
+        else:
+            self.login_window.clear_remembered_credentials()
+
+    def _save_remembered_credentials(self, username, password, remember):
+        """Save or clear credentials in credentials.json based on Remember Me state."""
+        import os, json
+        cred_path = os.path.join(os.path.dirname(__file__), 'credentials.json')
+        if remember and username and password:
+            data = {"username": username, "password": password, "remember": True}
+            try:
+                with open(cred_path, 'w') as f:
+                    json.dump(data, f)
+            except Exception as e:
+                logging.warning(f"Failed to save credentials: {e}")
+        else:
+            # Remove credentials file if exists
+            try:
+                if os.path.exists(cred_path):
+                    os.remove(cred_path)
+            except Exception as e:
+                logging.warning(f"Failed to remove credentials: {e}")
+
+    def show_registration_window(self):
         """Shows the registration window."""
         if self.registration_window is None:
-            self.registration_window = ui.RegistrationWindow(backend_url, self.current_theme)
+            self.registration_window = ui.RegistrationWindow(self.current_theme)
             self.registration_window.register_attempt_signal.connect(self.handle_registration_attempt)
             self.registration_window.toggle_theme_signal.connect(self.toggle_theme)
         self.registration_window._update_theme_icon(self.current_theme)
         self.registration_window.show()
 
-    @pyqtSlot(str, str, str, str)
-    def handle_registration_attempt(self, backend_url, username, password, confirm_password):
+    @pyqtSlot(str, str, str)
+    def handle_registration_attempt(self, username, password, confirm_password):
         """Handles the registration attempt signal from RegistrationWindow."""
-        logging.info(f"Attempting registration to {backend_url} for user {username}")
-        self.backend_base_url = backend_url
+        logging.info(f"Attempting registration for user {username}")
         self.registration_window.set_registering()
 
         try:
@@ -197,18 +239,6 @@ class AppController(QObject):
                 self.login_window.username_input.setFocus()
             # <<<<< END: SIMULATED REGISTRATION - REPLACE WITH ACTUAL API CALL >>>>>
 
-        except httpx.RequestError as e:
-            error_msg = f"Network error connecting to {backend_url}: {e}"
-            logging.error(f"Registration network error: {error_msg}")
-            self.registration_window.show_error(error_msg)
-        except httpx.HTTPStatusError as e:
-            try:
-                error_data = e.response.json()
-                error_msg = error_data.get("message", f"HTTP Error: {e.response.status_code}")
-            except:
-                error_msg = f"HTTP Error: {e.response.status_code}"
-            logging.error(f"Registration HTTP error: {error_msg}")
-            self.registration_window.show_error(error_msg)
         except Exception as e:
             error_msg = f"An unexpected error occurred during registration: {e}"
             logging.exception(error_msg)
@@ -220,6 +250,10 @@ class AppController(QObject):
         logging.info(f"Attempting login to {backend_url} for user {username}")
         self.backend_base_url = backend_url
         self.login_window.set_logging_in()
+
+        # Save or clear credentials based on Remember Me state
+        remember = self.login_window.remember_checkbox.isChecked()
+        self._save_remembered_credentials(username, password, remember)
 
         try:
             # --- TEMPORARY BYPASS: Auto-login for testing ---

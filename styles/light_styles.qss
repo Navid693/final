@@ -1,8 +1,8 @@
 /* light_styles.qss - Enhanced Light Theme */
 
 QWidget {
-    background-color: #f5f7fa; /* Lighter background */
-    color: #333333; /* Dark text */
+    background-color: #f5f5f5;
+    color: #000000;
     font-family: Segoe UI, Arial, sans-serif; /* Consistent font */
     font-size: 10pt;
     /* Disable border on base QWidget to prevent double borders */
@@ -10,92 +10,48 @@ QWidget {
 }
 
 QMainWindow {
-    background-color: #f5f7fa;
+    background-color: #f5f5f5;
+    color: #000000;
 }
 
 QGroupBox {
     background-color: #ffffff; /* White background */
-    border: 1px solid #dde1e7;
-    border-radius: 6px;
-    margin-top: 1ex; /* Space for title */
-    padding: 15px 10px 10px 10px; /* More padding top adjusted for title */
+    color: #000000;
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+    margin-top: 1em;
+    padding-top: 1em;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
-    subcontrol-position: top left; /* Title on top left */
-    padding: 0 5px;
-    margin-left: 10px; /* Indent title slightly */
-    background-color: #5c87c5; /* Accent blue */
-    color: white;
-    border-radius: 3px;
+    left: 10px;
+    padding: 0 3px;
 }
 
 QPushButton {
-    background-color: #e0e5eb;
-    color: #333333;
-    border: 1px solid #c9d0d9;
-    padding: 5px 15px;
+    background-color: #0078d4; /* Default button blue */
+    color: #ffffff;
+    border: none;
     border-radius: 4px;
-    min-height: 24px; /* Slightly taller buttons */
+    padding: 8px 16px;
 }
 
 QPushButton:hover {
-    background-color: #d0d6e0;
-    border: 1px solid #b0b8c4;
-}
-
-QPushButton:pressed {
-    background-color: #c0c8d4;
+    background-color: #106ebe;
 }
 
 QPushButton:disabled {
-    background-color: #ebeff5;
-    color: #a0a0a0;
-    border: 1px solid #dde3ec;
-}
-
-/* Special button styles for login page */
-QPushButton#login_button {
-    background-color: #2979ff; /* Blue button */
-    color: #ffffff;
-    font-weight: bold;
-    min-height: 30px; /* Taller than regular buttons */
-}
-
-QPushButton#login_button:hover {
-    background-color: #448aff; /* Lighter blue on hover */
-}
-
-QPushButton#login_button:pressed {
-    background-color: #1565c0; /* Darker blue when pressed */
-}
-
-QPushButton#register_button {
-    background-color: #43a047; /* Green color */
-    color: #ffffff;
-}
-
-QPushButton#register_button:hover {
-    background-color: #66bb6a; /* Lighter green on hover */
-}
-
-QPushButton#guest_button {
-    background-color: #757575; /* Gray color */
-    color: #ffffff; 
-}
-
-QPushButton#guest_button:hover {
-    background-color: #9e9e9e; /* Lighter gray on hover */
+    background-color: #cccccc;
+    color: #666666;
 }
 
 QLineEdit, QTextEdit, QPlainTextEdit {
     background-color: #ffffff;
-    color: #333333;
-    border: 1px solid #c9d0d9; /* Softer border */
-    border-radius: 4px; /* More rounded corners for inputs */
-    padding: 5px; /* Slightly more padding */
-    min-height: 22px; /* Consistent height */
+    color: #000000;
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+    padding: 5px;
 }
 
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
@@ -105,7 +61,7 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
 
 QLabel {
     background-color: transparent; /* Labels usually transparent */
-    color: #333333;
+    color: #000000;
     border: none; /* Ensure labels don't get borders */
     padding: 2px; /* Add slight padding for spacing */
 }
@@ -134,40 +90,31 @@ QLabel#error_label {
 }
 
 QCheckBox {
-    spacing: 5px; /* Space between checkbox and text */
-    background-color: transparent;
-    border: none;
-    color: #444444; /* Dark gray for checkbox text */
+    color: #000000;
+    font-size: 14px; /* Default Checkbox size */
 }
 
 QCheckBox::indicator {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
+    width: 20px;
+    height: 20px;
 }
 
 QCheckBox::indicator:unchecked {
-    border: 1px solid #c9d0d9;
+    border: 2px solid #cccccc;
     background-color: #ffffff;
 }
 
-QCheckBox::indicator:unchecked:hover {
-    border: 1px solid #b0b8c4;
-}
-
 QCheckBox::indicator:checked {
-    background-color: #5c87c5; /* Accent blue */
-    border: 1px solid #5078b6;
+    border: 2px solid #0078d4;
+    background-color: #0078d4;
 }
 
-QCheckBox::indicator:checked:hover {
-     background-color: #6e96cf;
-}
+/* Remember me checkbox specific styles are handled under LoginWindow QCheckBox */
 
+/* Status Bar */
 QStatusBar {
-    background-color: #e9edf3; /* Slightly bluer than main background */
-    color: #444444;
-    border-top: 1px solid #d2d8e1;
+    background-color: #ffffff;
+    color: #000000;
 }
 
 QStatusBar::item {
@@ -204,7 +151,6 @@ QComboBox::drop-down {
     border-bottom-right-radius: 3px;
 }
 
-/* Style for the dropdown arrow image could be added here */
 /* QComboBox::down-arrow { image: url(path/to/your/arrow.png); } */
 
 QComboBox QAbstractItemView { /* Style the dropdown list */
@@ -237,8 +183,8 @@ QSlider::handle:horizontal:hover {
 }
 
 QScrollArea {
-    border: none; /* Remove scroll area border if ScreenDisplayWidget has one */
-    background-color: transparent;
+    background-color: #f5f5f5;
+    border: 1px solid #cccccc;
 }
 
 QScrollBar:vertical {
@@ -286,17 +232,20 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
 }
 
 /* Style the ScreenDisplayWidget specifically */
-/* Assuming ScreenDisplayWidget inherits QWidget and has object name set */
-ScreenDisplayWidget {
+ScreenDisplayWidget { /* Use Class Name */
     background-color: #e8edf3; /* Slightly blue-tinted gray background */
     border: 1px solid #dde1e7;
 }
+#ScreenDisplayWidget { /* Use Object Name if set */
+     background-color: #e8edf3; /* Slightly blue-tinted gray background */
+     border: 1px solid #dde1e7;
+}
+
 
 /* Theme toggle toolbar styling */
 QToolBar {
-    background-color: #dce4ef; /* Light blue-gray */
+    background-color: #ffffff;
     border: none;
-    spacing: 10px;
 }
 
 /* Theme toggle button on login page */
@@ -339,7 +288,11 @@ QTextEdit#chat_display {
     border-radius: 4px;
     padding: 5px;
     selection-color: #ffffff;
-    selection-background-color: #5c87c5; 
+    selection-background-color: #5c87c5;
+    min-height: 100px; /* Added from later definition */
+    font-family: 'Segoe UI', Arial, sans-serif; /* Added from later definition */
+    font-size: 9pt; /* Added from later definition */
+    color: #333333; /* Added from later definition */
 }
 
 QLineEdit#chat_input {
@@ -356,14 +309,21 @@ QPushButton#chat_send_button {
 }
 
 /* --- Login Window Specific Styles --- */
-LoginWindow {
+LoginWindow { /* Use Class Name */
     background-color: #f5f5f5;
 }
+#LoginWindow { /* Use Object Name if set */
+     background-color: #f5f5f5;
+}
+
 
 /* Style the labels within LoginWindow */
-LoginWindow QLabel#backend_label, 
-LoginWindow QLabel#username_label, 
-LoginWindow QLabel#password_label {
+LoginWindow QLabel#backend_label,
+LoginWindow QLabel#username_label,
+LoginWindow QLabel#password_label,
+#LoginWindow QLabel#backend_label,
+#LoginWindow QLabel#username_label,
+#LoginWindow QLabel#password_label {
     padding-bottom: 2px; /* Less bottom padding */
     padding-top: 8px; /* More top padding */
     font-size: 9pt; /* Slightly smaller labels */
@@ -371,29 +331,33 @@ LoginWindow QLabel#password_label {
 }
 
 /* Logo placeholder specific styling */
-LoginWindow QLabel#logo_label { 
-     min-height: 100px; 
+LoginWindow QLabel#logo_label,
+#LoginWindow QLabel#logo_label {
+     min-height: 100px;
      padding-bottom: 10px; /* Space below logo */
 }
 
 /* Title labels specific styling */
-LoginWindow QLabel#title_label1 {
+LoginWindow QLabel#title_label1,
+#LoginWindow QLabel#title_label1 {
      font-size: 14pt;
      font-weight: bold;
      padding-bottom: 0px;
      color: #333333;
 }
-LoginWindow QLabel#title_label2 {
+LoginWindow QLabel#title_label2,
+#LoginWindow QLabel#title_label2 {
      font-size: 10pt;
-     color: #666666; 
+     color: #666666;
      padding-top: 0px;
      padding-bottom: 5px; /* Space below subtitle */
 }
 
 /* Input fields in LoginWindow */
-LoginWindow QLineEdit {
+LoginWindow QLineEdit,
+#LoginWindow QLineEdit {
      font-size: 11pt;
-     padding: 6px;
+     padding: 6px; /* Keep padding from original LoginWindow QLineEdit */
      border-radius: 5px;
      margin-bottom: 5px; /* Space below input fields */
      background-color: #ffffff;
@@ -401,81 +365,110 @@ LoginWindow QLineEdit {
 }
 
 /* Remember Me checkbox in LoginWindow */
-LoginWindow QCheckBox {
+LoginWindow QCheckBox#remember_me_checkbox,
+#LoginWindow QCheckBox#remember_me_checkbox {
      padding-top: 5px;
      font-size: 9pt;
+     color: #000000; /* Added from later definition */
+     font-size: 11pt; /* Added from later definition */
+     spacing: 8px; /* Added from later definition */
+     margin: 5px 0; /* Added from later definition */
+     padding: 5px 0; /* Added from later definition */
+}
+LoginWindow QCheckBox#remember_me_checkbox::indicator,
+#LoginWindow QCheckBox#remember_me_checkbox::indicator {
+     width: 20px;
+     height: 20px;
+     border: 2px solid #344566; /* Added from later definition */
+     border-radius: 4px; /* Added from later definition */
+}
+LoginWindow QCheckBox#remember_me_checkbox::indicator:unchecked,
+#LoginWindow QCheckBox#remember_me_checkbox::indicator:unchecked {
+     background-color: #ffffff; /* Added from later definition */
+}
+LoginWindow QCheckBox#remember_me_checkbox::indicator:checked,
+#LoginWindow QCheckBox#remember_me_checkbox::indicator:checked {
+     background-color: #344566; /* Added from later definition */
+     image: url(Icons/checkmark.svg); /* Added from later definition */
+}
+LoginWindow QCheckBox#remember_me_checkbox::indicator:hover,
+#LoginWindow QCheckBox#remember_me_checkbox::indicator:hover {
+     border-color: #455b82; /* Added from later definition */
 }
 
-/* Specific Button Colors in LoginWindow */
-LoginWindow QPushButton#login_button {
+
+/* Specific Button Colors in LoginWindow - THESE ARE THE CORRECT ONES */
+LoginWindow QPushButton#login_button,
+#LoginWindow QPushButton#login_button {
     background-color: #4CAF50; /* Green */
-    border: 1px solid #388E3C;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 20px;
+    font-size: 12pt;
     font-weight: bold;
-    color: white;
-    margin-top: 10px; /* Space above login button */
+    min-height: 40px;
+    margin: 5px 0; /* Consistent margin */
 }
-LoginWindow QPushButton#login_button:hover {
+LoginWindow QPushButton#login_button:hover,
+#LoginWindow QPushButton#login_button:hover {
     background-color: #66BB6A;
-    border: 1px solid #4CAF50;
 }
-LoginWindow QPushButton#login_button:pressed {
+LoginWindow QPushButton#login_button:pressed,
+#LoginWindow QPushButton#login_button:pressed {
     background-color: #388E3C;
 }
 
-LoginWindow QPushButton#register_button {
-    background-color: #2196F3; /* Blue */
-    border: 1px solid #1976D2;
-    color: white;
+LoginWindow QPushButton#register_button,
+#LoginWindow QPushButton#register_button {
+    background-color: #3a6fbf; /* Blue */
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 20px;
+    font-size: 12pt;
+    font-weight: bold;
+    min-height: 40px;
+    margin: 5px 0; /* Consistent margin */
 }
-LoginWindow QPushButton#register_button:hover {
-    background-color: #4FC3F7;
-    border: 1px solid #2196F3;
+LoginWindow QPushButton#register_button:hover,
+#LoginWindow QPushButton#register_button:hover {
+    background-color: #4a7fd0;
 }
-LoginWindow QPushButton#register_button:pressed {
-    background-color: #1976D2;
+LoginWindow QPushButton#register_button:pressed,
+#LoginWindow QPushButton#register_button:pressed {
+    background-color: #2a5fa9;
 }
 
-LoginWindow QPushButton#guest_button {
+LoginWindow QPushButton#guest_button, /* Keep guest button style if needed */
+#LoginWindow QPushButton#guest_button {
     background-color: #757575; /* Gray */
     border: 1px solid #616161;
     color: white;
 }
-LoginWindow QPushButton#guest_button:hover {
+LoginWindow QPushButton#guest_button:hover,
+#LoginWindow QPushButton#guest_button:hover {
     background-color: #9E9E9E;
     border: 1px solid #757575;
 }
-LoginWindow QPushButton#guest_button:pressed {
+LoginWindow QPushButton#guest_button:pressed,
+#LoginWindow QPushButton#guest_button:pressed {
     background-color: #616161;
 }
 
-/* Theme Toggle Button */
-QPushButton#theme_button {
-    background-color: transparent;
-    border: none;
-    min-width: 35px;
-    max-width: 35px;
-    min-height: 35px;
-    max-height: 35px;
-    padding: 2px;
-    border-radius: 17px;
-    font-size: 14pt; /* Ensure emoji displays at proper size */
-}
-
-QPushButton#theme_button:hover {
-    background-color: #e0e0e0; /* Slight hover effect */
-    border-radius: 17px; /* Make hover circular */
-}
 
 /* Error label specific style */
-LoginWindow QLabel#error_label {
+LoginWindow QLabel#error_label,
+#LoginWindow QLabel#error_label {
     color: #F44336; /* Red for light theme */
     font-size: 9pt;
-    padding-top: 10px;
+    padding-top: 10px; /* Use padding from specific LoginWindow rule */
+    background-color: transparent; /* Remove background from default error label */
 }
 
 /* === Toolbar === */
 QToolBar#main_toolbar {
-    background-color: #dce4ef; /* Light blue-gray */
+    background-color: #ffffff;
     border-bottom: 1px solid #c9d0d9;
     padding: 2px 5px; /* Add vertical padding */
     spacing: 6px; /* Adjust spacing */
@@ -492,31 +485,31 @@ QToolBar#main_toolbar QLabel {
 }
 
 /* Specific Toolbar Labels - Status Text (Bold) */
-QLabel#peer_status_text_label {
-    font-weight: bold; 
+QToolBar#main_toolbar QLabel#peer_status_text_label {
+    font-weight: bold;
 }
 
 /* Specific Toolbar Labels - Peer Username (Bold) */
-QLabel#peer_username_label {
+QToolBar#main_toolbar QLabel#peer_username_label {
     font-weight: bold;
     color: #111;
 }
 
 /* Specific Toolbar Labels - Role (Italic) */
-QLabel#role_label {
+QToolBar#main_toolbar QLabel#role_label {
     font-style: italic;
 }
 
 /* Specific Toolbar Labels - Session Timer (Dimmer) */
-QLabel#session_timer_label {
+QToolBar#main_toolbar QLabel#session_timer_label {
     color: #777;
 }
 
 /* Status Indicator (The Circle) - Keep it simple */
-QLabel#peer_status_indicator {
+QToolBar#main_toolbar QLabel#peer_status_indicator {
     background-color: #F44336; /* Default Red */
     border: 1px solid #d2d8e1;
-    border-radius: 7px; 
+    border-radius: 7px;
     min-width: 14px;
     max-width: 14px;
     min-height: 14px;
@@ -525,10 +518,6 @@ QLabel#peer_status_indicator {
     margin: 0px 2px 0px 0px;
 }
 
-/* Quick Action Buttons Styling (Already defined) */
-/* QPushButton#quick_share_button { ... } */
-/* QPushButton#quick_stop_button { ... } */
-/* QPushButton#quick_disconnect_button { ... } */
 
 /* Right-side Flat Icon Buttons */
 QToolBar#main_toolbar QPushButton#log_button,
@@ -541,15 +530,15 @@ QToolBar#main_toolbar QPushButton#toolbar_logout_button {
     border: none;
     padding: 5px;
     margin: 0px 1px;
-    border-radius: 4px; 
+    border-radius: 4px;
     min-width: 28px;
     min-height: 28px;
     color: #444; /* Icon color */
 }
 
 /* Log button specific font size if emoji is too small */
-QPushButton#log_button { 
-    font-size: 14pt; 
+QToolBar#main_toolbar QPushButton#log_button {
+    font-size: 14pt;
 }
 
 /* Hover/Press for Flat Icon Buttons */
@@ -559,7 +548,7 @@ QToolBar#main_toolbar QPushButton#recorder_button:hover,
 QToolBar#main_toolbar QPushButton#fullscreen_button:hover,
 QToolBar#main_toolbar QPushButton#theme_button:hover,
 QToolBar#main_toolbar QPushButton#toolbar_logout_button:hover {
-    background-color: #d8d8d8; 
+    background-color: #d8d8d8;
 }
 
 QToolBar#main_toolbar QPushButton#log_button:pressed,
@@ -568,7 +557,7 @@ QToolBar#main_toolbar QPushButton#recorder_button:pressed,
 QToolBar#main_toolbar QPushButton#fullscreen_button:pressed,
 QToolBar#main_toolbar QPushButton#theme_button:pressed,
 QToolBar#main_toolbar QPushButton#toolbar_logout_button:pressed {
-    background-color: #c8c8c8; 
+    background-color: #c8c8c8;
 }
 
 /* Sidebar styling */
@@ -605,23 +594,6 @@ QToolBar#main_toolbar QPushButton#toolbar_logout_button:pressed {
     background-color: #f5f7fa; /* Light background */
 }
 
-/* Chat display special styling */
-#chat_display {
-    background-color: #ffffff; /* White background */
-    border: 1px solid #dde1e7;
-    border-radius: 4px;
-    color: #333333;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    font-size: 9pt;
-    padding: 5px;
-    min-height: 100px;
-}
-
-/* Ensure screen display fills the space */
-#ScreenDisplayWidget {
-    background-color: #e8edf3; /* Slightly blue-tinted gray background */
-    border: 1px solid #dde1e7;
-}
 
 /* Connection Buttons */
 #connect_button {
@@ -742,4 +714,9 @@ QToolBar#main_toolbar QPushButton#toolbar_logout_button:pressed {
 
 #reset_settings_button:pressed {
     background-color: #c0c8d4;
-} 
+}
+
+/* --- Redundant Login/Register Button Block Removed --- */
+
+/* --- Redundant Remember Me Checkbox Block Removed --- */
+/* (Styles were merged into the LoginWindow QCheckBox#remember_me_checkbox block above) */
